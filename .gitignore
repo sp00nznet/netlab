@@ -1,0 +1,12 @@
+# Your lab: hosts, addresses, instances
+lab.env
+drive/inst/*.env
+
+# Run output
+captures/
+*.ppm
+*.png
+*.log
+
+# Python
+__pycache__/
