@@ -25,6 +25,17 @@ scenarios/simpsons-arcade/match.sh a b captures/
 - **Players are named by `PLAYER`**, and names must differ: psnr refuses a
   second player with a name already taken.
 
+## Verified
+
+As of 2026-09-30, with ps3recomp#200 and psnr's relay:
+
+- **Two machines on a LAN:** this PC hosting, the test VM joining.
+- **Host behind a NAT:** the VM hosting from behind the NAT bridge.
+- **Joiner behind a NAT:** the VM joining from behind the NAT bridge. The
+  game setup went through the relay.
+
+In each run both reached Stage 1 in sync.
+
 ## What a working match looks like
 
 - **The host's log:** `created room`, `signaling: member 2 (…)`, then the

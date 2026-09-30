@@ -48,7 +48,12 @@ Everything here happened while building this lab.
   launchers do.
 - **A host kicks its joiner right after the lobby.** Check both frame
   rates. A host starved of CPU (another build on the machine) misses the
-  lobby's timing.
+  lobby's timing. If the rates are fine, line the two sides up in time.
+  With `PS3_NET_TRACE=1` (`NET_TRACE=1` in an instance file, `-NetTrace`
+  for the remote installer), ps3recomp stamps every packet line with the
+  wall clock. Note each machine's clock offset first (`date` on each). It
+  showed a joiner whose read hung for 4 s after the setup arrived, which
+  was a runtime bug, not the network.
 
 ## Networks
 

@@ -15,4 +15,5 @@ All notable changes to this project are documented here. The format follows
 - `nat/`: a home-router NAT bridge on the Proxmox host, and moving the VM
   behind it and back.
 - `servers/psnr-deploy.sh`: run a psnr server on a lab host.
-- `scenarios/simpsons-arcade/`: an online match between two instances.
+- `scenarios/simpsons-arcade/`: an online match between two instances,
+  verified on a LAN and with either side behind the NAT bridge.
