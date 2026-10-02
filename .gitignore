@@ -10,3 +10,7 @@ captures/
 
 # Python
 __pycache__/
+
+# Farm state and job logs
+farm/.state/
+farm/logs/
