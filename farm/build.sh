@@ -27,8 +27,8 @@ DEPS=()
 while [ $# -gt 0 ] && [ "$1" != -- ]; do DEPS+=("$1"); shift; done
 [ "$1" = -- ] && shift
 
-# Least loaded: 1-minute load over cores.
-BUILDER=$(grep -v '^#' "$NETLAB/farm/builders" | while read -r b _; do
+# Least loaded: 1-minute load over cores. BUILDER=<ssh target> picks one.
+[ -n "$BUILDER" ] || BUILDER=$(grep -v '^#' "$NETLAB/farm/builders" | while read -r b _; do
   [ -n "$b" ] || continue
   l=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$b" 'echo $(cut -d" " -f1 /proc/loadavg) $(nproc)' 2>/dev/null) &&
     echo "$l $b"
@@ -39,7 +39,7 @@ echo "builder: $BUILDER"
 # Retail data, build output and analysis dumps never go over; they're the bulk
 # of a game dir and no build reads them. Dir names are anchored to the top of
 # each repo (burnout3/src/game is source, forcecommander/game is data).
-TOP_EXCLUDES="build build-* bin _work _harness _drill original game disc extracted vfs pkg gamedata spu_dump runs saves scratch _local"
+TOP_EXCLUDES="build build-* bin work _work _harness _drill original game disc extracted vfs pkg gamedata spu_dump runs saves scratch _local"
 ANY_EXCLUDES=".git __pycache__ *.iso *.ISO *.zip *.rar *.7z *.exe *.EXE *.dll *.DLL *.obj *.pdb *.ilk *.log"
 
 STATE="$NETLAB/farm/.state"; mkdir -p "$STATE"
