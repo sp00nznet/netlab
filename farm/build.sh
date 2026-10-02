@@ -17,12 +17,15 @@
 #            (the lifted C) from the working tree as they are now
 #   =<name>  land it as /work/<name> rather than under its own basename, so a
 #            different checkout stands in where the game expects ../<name>
+#            or, with a path (=<game>/<submodule>), in place of a submodule
 # A/B: the same game against two checkouts, each in its own slot, so neither
 # build dir is thrown away:
 #   farm/build.sh --slot a cmake ~/src/xbox/burnout3 ~/src/xbox/xboxrecomp
 #   farm/build.sh --slot b cmake ~/src/xbox/burnout3 ~/src/xbox/xr-pr=xboxrecomp
 #   farm/build.sh --slot old cmake ~/src/pc/rol@v0.3 ~/src/pc/pcrecomp-rol -- ...
 # A slot's first build is cold. --full resends everything.
+# KEEP="<dir> ..." sends top-level dirs that are skipped by default (work, ...).
+# TARGET=<target> builds that CMake target only.
 set -e -o pipefail
 set -f   # the exclude patterns below must reach tar unexpanded
 NETLAB=$(cd "$(dirname "$0")/.." && pwd)
@@ -57,6 +60,8 @@ echo "builder: $BUILDER, workspace $W"
 # of a game dir and no build reads them. Dir names are anchored to the top of
 # each repo (burnout3/src/game is source, forcecommander/game is data).
 TOP_EXCLUDES="build build-* bin work _work _harness _drill original game disc extracted vfs pkg gamedata spu_dump runs saves scratch _local"
+# KEEP="work ..." sends those dirs after all (catz keeps its lifted C in work/).
+for k in $KEEP; do TOP_EXCLUDES=" $TOP_EXCLUDES "; TOP_EXCLUDES=${TOP_EXCLUDES// $k / }; done
 ANY_EXCLUDES=".git __pycache__ *.iso *.ISO *.zip *.rar *.7z *.exe *.EXE *.dll *.DLL *.obj *.pdb *.ilk *.log"
 
 # <dir>[@<ref>][=<name>] -> SPEC_DIR SPEC_REF SPEC_NAME
@@ -72,9 +77,11 @@ parse() {
 STATE="$NETLAB/farm/.state"; mkdir -p "$STATE"
 sync_spec() {
   parse "$1"
-  local d=$SPEC_DIR n=$SPEC_NAME ref=$SPEC_REF b st since now tmp
+  local d=$SPEC_DIR n=$SPEC_NAME ref=$SPEC_REF b st since now tmp k r
   b=$(basename "$d")
-  st="$STATE/$BUILDER-${SLOT:-main}-$n"
+  k=${n//\//_}
+  st="$STATE/$BUILDER-${SLOT:-main}-$k"
+  r="/tmp/farm-$$-${SLOT:-main}-$k"
   local ex=()
   for p in $TOP_EXCLUDES; do ex+=("--exclude=$b/$p"); done
   for p in $ANY_EXCLUDES; do ex+=("--exclude=$p"); done
@@ -87,27 +94,35 @@ sync_spec() {
     git -C "$d" archive --prefix="$n/" "$ref" > "$tmp.ref"
     comm -23 <(git -C "$d" ls-files | sort) <(git -C "$d" ls-tree -r --name-only "$ref" | sort) > "$tmp.gone"
     echo "sync $n @ $ref ($(git -C "$d" rev-parse --short "$ref")): $(du -h "$tmp" | cut -f1) + $(du -h "$tmp.ref" | cut -f1)"
-    scp -q "$tmp" "$BUILDER:/tmp/farm-$$-${SLOT:-main}-$n.tar"
-    scp -q "$tmp.ref" "$BUILDER:/tmp/farm-$$-${SLOT:-main}-$n.ref.tar"
-    scp -q "$tmp.gone" "$BUILDER:/tmp/farm-$$-${SLOT:-main}-$n.gone"
+    scp -q "$tmp" "$BUILDER:$r.tar"
+    scp -q "$tmp.ref" "$BUILDER:$r.ref.tar"
+    scp -q "$tmp.gone" "$BUILDER:$r.gone"
     ssh "$BUILDER" "set -e; mkdir -p $W && cd $W && rm -rf '$n' &&
-      tar --no-same-owner -xf /tmp/farm-$$-${SLOT:-main}-$n.tar && tar --no-same-owner -xf /tmp/farm-$$-${SLOT:-main}-$n.ref.tar &&
-      (cd '$n' && tr -d '\r' < /tmp/farm-$$-${SLOT:-main}-$n.gone | xargs -r -d '\n' rm -f) &&
-      rm /tmp/farm-$$-${SLOT:-main}-$n.tar /tmp/farm-$$-${SLOT:-main}-$n.ref.tar /tmp/farm-$$-${SLOT:-main}-$n.gone"
+      tar --no-same-owner -xf $r.tar && tar --no-same-owner -xf $r.ref.tar &&
+      (cd '$n' && tr -d '\r' < $r.gone | xargs -r -d '\n' rm -f) &&
+      rm $r.tar $r.ref.tar $r.gone"
     rm -f "$tmp" "$tmp.ref" "$tmp.gone" "$st"   # the next plain sync of this slot starts full
     return
   fi
   since=
+  local clean=
+  case $n in */*)
+    # A path inside another repo (a submodule): replace that dir whole, and
+    # resend the repo around it in full next time, so the stand-in can't linger.
+    # ponytail: files only the stand-in has stay until --full of a fresh slot
+    clean="rm -rf '$W/$n' &&"
+    rm -f "$STATE/$BUILDER-${SLOT:-main}-${n%%/*}" "$st" ;;
+  esac
   # ponytail: mtime-based; deletions and files copied in with old mtimes are missed, --full catches them
   [ -z "$FULL" ] && [ -f "$st" ] && since="--newer-mtime=@$(cat "$st")"
   now=$(date +%s)
   (cd "$(dirname "$d")" && tar -cf "$tmp" $since "${ex[@]}" --transform "s,^$b,$n," "$b")
   echo "sync $n$([ "$n" = "$b" ] || echo " ($d)"): $(du -h "$tmp" | cut -f1)"
   # A file, not a pipe: a long tar|ssh pipe from Windows has dropped mid-stream.
-  scp -q "$tmp" "$BUILDER:/tmp/farm-$$-${SLOT:-main}-$n.tar"
+  scp -q "$tmp" "$BUILDER:$r.tar"
   rm -f "$tmp"
-  ssh "$BUILDER" "mkdir -p $W && tar --no-same-owner -xf /tmp/farm-$$-${SLOT:-main}-$n.tar -C $W && rm /tmp/farm-$$-${SLOT:-main}-$n.tar"
-  echo "$now" > "$st"
+  ssh "$BUILDER" "mkdir -p $W && $clean tar --no-same-owner -xf $r.tar -C $W && rm $r.tar"
+  [ -n "$clean" ] || echo "$now" > "$st"
 }
 sync_spec "$GAME"
 DEPNAMES=
@@ -123,7 +138,7 @@ echo "job $JOB, log $LOG"
 # The toolset builds in $W/$GAME and leaves the paths it built (relative to
 # $W) in $W/.artifacts-$JOB.
 {
-  echo "W='$W' GAME='$NAME' DEPS='$DEPNAMES' JOB='$JOB' CMAKE_ARGS='$*'"
+  echo "W='$W' GAME='$NAME' DEPS='$DEPNAMES' JOB='$JOB' CMAKE_ARGS='$*' TARGET='$TARGET'"
   cat "$NETLAB/toolsets/$TOOLSET/build.sh"
   cat <<'EOF'
 cd "$W"
