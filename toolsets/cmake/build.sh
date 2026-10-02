@@ -8,5 +8,5 @@ cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=/opt/clangcl.cmake \
   -DCMAKE_BUILD_TYPE=Release $CMAKE_ARGS
 /usr/bin/time -f "build wall %e s" cmake --build build -j"$(nproc)"
 # Games put the exe in build/ or bin/ (burnout3).
-find build bin -maxdepth 1 \( -name '*.exe' -o -name '*.pdb' -o -name '*.map' \) 2>/dev/null |
+find $(ls -d build bin 2>/dev/null) -maxdepth 1 \( -name '*.exe' -o -name '*.pdb' -o -name '*.map' \) |
   sed "s|^|$GAME/|" > "/work/.artifacts-$JOB"

@@ -21,7 +21,15 @@ XWIN=0.10.0
 
 ssh "$PVE" sh -s <<END
 set -e
-pct create $ID local:vztmpl/debian-13-standard_13.0-0_amd64.tar.zst \
+# Any Debian 13 template the node has; the newest one offered if it has none.
+T=\$(pveam list local | awk '/debian-13-standard.*amd64/ { print \$1 }' | tail -1)
+if [ -z "\$T" ]; then
+  pveam update >/dev/null
+  N=\$(pveam available --section system | awk '/debian-13-standard.*amd64/ { print \$2 }' | tail -1)
+  pveam download local "\$N" >/dev/null
+  T=local:vztmpl/\$N
+fi
+pct create $ID "\$T" \
   --hostname builder-clangcl-$ID --cores $CORES --memory $MEM --swap 4096 \
   --rootfs $STORE:64 --net0 name=eth0,bridge=vmbr0,ip=dhcp \
   --nameserver "192.0.2.1 1.1.1.1" --unprivileged 1 --features nesting=1 \
@@ -42,7 +50,7 @@ ln -sf clang-cl-19 /usr/bin/clang-cl
 cd /tmp
 curl -fsSL https://github.com/Jake-Shadle/xwin/releases/download/$XWIN/xwin-$XWIN-x86_64-unknown-linux-musl.tar.gz | tar xz
 install xwin-$XWIN-x86_64-unknown-linux-musl/xwin /usr/local/bin/xwin
-xwin --accept-license --arch x86,x86_64 --cache-dir /opt/xwin-cache splat --output /opt/xwin
+/usr/local/bin/xwin --accept-license --arch x86,x86_64 --cache-dir /opt/xwin-cache splat --output /opt/xwin
 rm -rf /opt/xwin-cache xwin-$XWIN-*
 ip -4 -br a show eth0
 END
