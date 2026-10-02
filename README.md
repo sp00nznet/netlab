@@ -1,24 +1,43 @@
 # recomp-netlab
 
 A build farm and test lab you drive from a terminal or an agent. It builds
-your projects on Linux builders (Proxmox containers), runs the result on your
-Windows machines and grabs what's on screen, and ships it. It started with
-statically recompiled games, and builds ordinary software and games the same
-way.
+your projects on Linux builders (Proxmox containers), runs them on Windows
+and Linux test machines, plays them, checks them, and ships them. It started
+with statically recompiled games, and handles ordinary software and games the
+same way.
 
-```sh
-./netlab build encarta        # sync the checkout to the best builder, build, bring the exe back
-./netlab run encarta          # start it on this machine (or --on testbox)
-./netlab snap encarta a.png   # a screenshot of its window
-./netlab ship encarta v0.4    # publish it (a GitHub draft release, itch.io, or the LAN share)
+## The loop
+
+```
+  build ──> run ──> play ──> qa ──> ship
+    ^                         │
+    └──── fix, build again ───┘
 ```
 
-- **One recipe per project** says how to build, run and ship it:
-  [`projects/`](projects/). Recipes hold no paths or hosts; your checkouts
-  and machines live in `local/`.
+| Step | Command | What happens |
+|---|---|---|
+| **build** | `netlab build <project>` | The checkout goes to the builder expected to finish first, only changed files after the first time; the build comes back to `build-farm/` |
+| **run** | `netlab run <project> --on <machine>` | Started on the machine's desktop: this one, a Windows box or a Linux box over SSH |
+| **play** | `netlab play <project> <steps>` | Keys, clicks, typing, menus, a game's pad, waits for a window or a log line, and screenshots of its window |
+| **qa** | `netlab qa <project> --on <machine>` | Its own checks (a self-test, a conformance harness) and its steps file: PASS, FAIL or SKIP, and a report with logs and screenshots |
+| **rebuild** | `netlab check <project>` | Build, then QA, in one go: the inner loop after a change |
+| **ship** | `netlab ship <project> <tag>` | A GitHub draft release, itch.io, or the LAN share, per the recipe |
+
+```sh
+./netlab check opennote                  # build on the farm, then its self-test and a menu walk here
+./netlab qa connectty --on linuxbox      # the AppImage on the Linux VM: window up, screenshot
+./netlab ship opennote v1.4              # a draft release with the build attached
+```
+
+- **One recipe per project** says how to build, run, play, check and ship
+  it: [`projects/`](projects/). Recipes hold no paths or hosts; your
+  checkouts and machines live in `local/`.
 - **Builders by kind:** clang-cl + xwin (MSVC-ABI Windows programs, built on
   Linux), Godot (headless export), Node (Electron, web). A builder is one
   `setup.sh` ([`builders/`](builders/)); a new stack is a new folder.
+- **Test machines:** this Windows machine, a Windows VM with a real GPU
+  ([vm/](vm/README.md)), and a Linux VM with a desktop that logs itself on
+  ([vm/create-linux-vm.sh](vm/create-linux-vm.sh)).
 - **The fastest builder that isn't busy:** every cold build's time is
   recorded per project and builder. A job goes where (its time there) ×
   (1 + load per core) is lowest. `netlab bench <project>` measures every
@@ -27,11 +46,33 @@ way.
   checkout in place of a dependency or a submodule, and keep each variant in
   its own slot (`--slot b`) so neither build dir is thrown away.
   ([farm/build.sh](farm/build.sh))
-- **Drive games from outside:** press buttons, wait for a log line, grab
-  frames, on this machine or a test box over SSH
-  ([docs/driving.md](docs/driving.md)). Plus a Windows test VM with a real
-  GPU ([vm/](vm/README.md)), a home-router NAT on demand ([nat/](nat/)), and
-  multi-player scenarios ([scenarios/](scenarios/simpsons-arcade/README.md)).
+- **Games from outside:** pad mailboxes, frame dumps, a home-router NAT on
+  demand ([nat/](nat/)), and multi-player scenarios
+  ([docs/driving.md](docs/driving.md), [scenarios/](scenarios/simpsons-arcade/README.md)).
+
+## Play and QA
+
+A steps file is one step per line, the same on Windows (`drive/play.ps1`)
+and Linux (`drive/play.sh`):
+
+```
+expect-window OpenNote 30     # fail unless its window is up within 30 s
+key alt+f                     # menus by keyboard; also ctrl+n, enter, esc, down, f5, ...
+click 410 62                  # inside the window
+type hello                    # careful on a machine someone uses
+pad 0x4000                    # a game's pad mailbox (the machine's PAD)
+expect-log ManagerGetStatus() -> ONLINE 120
+wait 3
+snap file-menu.png            # the program's window only, never the whole desktop
+```
+
+The first `expect` that times out fails the run, after a screenshot of that
+moment. `netlab qa` runs the recipe's `QA` command first (exit code decides;
+`QA_SKIP` is a regex for a harness's way of saying it skipped something, which
+is not a pass), then plays `QA_STEPS` against the running program, then
+collects `QA_ARTIFACTS`. Reports go to `local/qa/<project>/<time>/`.
+[docs/qa.md](docs/qa.md) lists the harnesses your projects already have and
+how each one plugs in.
 
 ## Example: Encarta 97, from an agent
 
@@ -57,8 +98,10 @@ SHIP=lan                           # built from a retail product: stays on the L
    starts it in the checkout. `$ENCARTA_CONTENT` comes from the machine's file,
    `local/machines/local.env`. With `--on testbox`, the build and a `run.cmd`
    are copied to the test box and started in its desktop session.
-3. **Look.** `./netlab snap encarta enc.png` captures only Encarta's window,
-   never the rest of the desktop. `./netlab stop encarta` ends it.
+3. **Play and check.** `./netlab snap encarta enc.png` captures only
+   Encarta's window, never the rest of the desktop. `./netlab qa encarta`
+   starts it, plays [`projects/encarta.qa`](projects/encarta.qa) (the
+   article loads, then Find opens) and stops it, with a report of what it saw.
 4. **Ship.** `./netlab ship encarta v0.4` copies the build to the share's
    `releases/encarta/v0.4/`. A project with `SHIP=github` gets a draft
    GitHub release instead, and `SHIP=itch` goes through butler.
@@ -78,7 +121,9 @@ goes in `local/projects/<name>.env` instead, which wins over `projects/`.
 | `DEPS` | Other projects it builds against: `xboxrecomp`, `pcrecomp=tools` (land as `../tools`) |
 | `ARTIFACTS` | Globs for what comes back, if not the toolset's default |
 | `KEEP`, `EXCLUDE` | Top-level dirs to send that are skipped by default; more paths to skip |
-| `EXE`, `RUN`, `RUN_FILES`, `PROC` | What to run, the command line (`$EXE` and the machine's variables expand), repo files it needs on a remote machine, the process name |
+| `EXE`, `RUN`, `RUN_FILES`, `PROC`, `WINDOW` | What to run (a glob is fine), the command line (`$EXE` and the machine's variables expand), repo files it needs on a remote machine, the process name, its window title |
+| `QA`, `QA_STEPS`, `QA_SKIP`, `QA_ARTIFACTS` | A check command (exit code decides), a steps file to play, the regex that means "skipped", and files to keep |
+| `EXE_LINUX`, `RUN_LINUX`, `PROC_LINUX`, `QA_LINUX`, `QA_STEPS_LINUX` | The same, on a Linux machine |
 | `SHIP`, `ITCH_TARGET` | `github`, `itch` (`user/game:channel`), `lan`, or `none` |
 
 The farm never sends `.git`, build output, retail images, `node_modules`,
@@ -86,15 +131,19 @@ The farm never sends `.git`, build output, retail images, `node_modules`,
 
 ## Setting up
 
-1. **Your lab:** `cp lab.env.example lab.env` (the Proxmox host, the test VM),
-   then `cp -r local.example local` and fill in `local/checkouts` (where each
-   project is checked out) and `local/machines/` (where to run things).
-2. **Builders:** `builders/create.sh <kind> <proxmox-host> <vmid> <storage>`
+1. **Your lab:** `cp lab.env.example lab.env` (the Proxmox host, the test
+   VMs), then `cp -r local.example local` and fill in `local/checkouts` (where
+   each project is checked out) and `local/machines/` (where to run things:
+   `KIND=local`, `remote` for Windows over SSH, `linux` for Linux over SSH).
+2. **Test machines:** the Windows VM ([vm/README.md](vm/README.md)), and the
+   Linux VM: `vm/create-linux-vm.sh` (Debian 13 + Xfce, logged on by itself,
+   with xdotool and ImageMagick; set `LINUX_*` in `lab.env`).
+3. **Builders:** `builders/create.sh <kind> <proxmox-host> <vmid> <storage>`
    makes a Debian container and runs `builders/<kind>/setup.sh` in it. List it
    in `farm/builders` (from `farm/builders.example`) as `<ssh target> <kind>`.
    `SHARE=<host path>` gives it a share at `/share`, where every build is
    dropped.
-3. **Agents:** the [netlab skill](.claude/skills/netlab/SKILL.md) teaches
+4. **Agents:** the [netlab skill](.claude/skills/netlab/SKILL.md) teaches
    Claude the commands. In this repo it loads on its own; to use it from
    other projects, copy or link it into `~/.claude/skills/`.
 
@@ -105,14 +154,14 @@ your workstation, root SSH to the Proxmox hosts, and SSH to the builders.
 
 | Path | What |
 |---|---|
-| `netlab` | The CLI: build, run, snap, stop, ship, bench, times, status, log |
+| `netlab` | The CLI: build, run, play, snap, stop, qa, check, ship, bench, times, status, log |
 | `projects/` | Recipes (`local/projects/` for your private ones) |
 | `farm/` | `build.sh` (sync, place, build, collect) and the builder list |
 | `toolsets/<name>/` | How a builder builds one kind of project |
 | `builders/<kind>/` | What a builder of that kind has (`setup.sh`); `create.sh` makes one |
-| `drive/` | Drive running games (`lib.sh`, `drive.sh`), and window captures |
+| `drive/` | The play runners (`play.ps1`, `play.sh`), and game driving (`lib.sh`, `drive.sh`) |
 | `games/<runtime>/` | How to launch and drive one runtime's games |
-| `vm/`, `nat/`, `servers/`, `scenarios/` | The test VM, the NAT bridge, lab servers, multi-player runs |
+| `vm/`, `nat/`, `servers/`, `scenarios/` | The test VMs, the NAT bridge, lab servers, multi-player runs |
 | `local.example/` | What `local/` holds; `local/` itself is git-ignored |
 | `docs/` | How driving works; what went wrong building this, and the fixes |
 

@@ -1,0 +1,4 @@
+# connectty starts and shows its main window.
+expect-window Connectty 60
+wait 3
+snap main.png

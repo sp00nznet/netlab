@@ -1,0 +1,10 @@
+# OpenNote opens, and its File menu works. Nothing is typed: on a machine
+# someone uses, these are their real notes.
+expect-window OpenNote 30
+wait 2
+snap main.png
+key alt+f
+wait 1
+snap file-menu.png
+key esc
+key esc

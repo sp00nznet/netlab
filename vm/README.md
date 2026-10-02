@@ -58,3 +58,25 @@ installer, e.g. [`games/ps3recomp/install-remote.ps1`](../games/ps3recomp/README
   session, not from SSH, whose session 0 has no desktop.
 - **Windows Update and hibernation are off**, so the thin disk doesn't grow
   by itself.
+
+# The Linux test box
+
+A Debian 13 VM whose desktop (Xfce) logs its user on by itself, so programs
+started over SSH have a screen: native Linux builds run, play and pass QA
+there. No GPU; Mesa renders in software.
+
+```sh
+vm/create-linux-vm.sh     # LINUX_* in lab.env; cloud-init does the rest (5-15 minutes)
+```
+
+It uses the Proxmox host's root SSH keys for the `netlab` user. Then describe
+it as a machine, `local/machines/linuxbox.env`:
+
+```sh
+KIND=linux
+SSH=netlab@<its address or name>
+```
+
+and use it with `--on linuxbox`. It comes from Debian's "generic" cloud
+image: the "genericcloud" one has no graphics drivers, so LightDM finds no
+screen to log on to.

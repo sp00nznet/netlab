@@ -1,0 +1,9 @@
+# Encarta 97 boots the lifted ENC97.EXE to its first article, and the Find
+# button opens its search. Coordinates are inside the 1280x960 window.
+expect-window Microsoft Encarta 90
+wait 10
+snap article.png
+click 410 62          # Find
+wait 3
+snap find.png
+key esc
