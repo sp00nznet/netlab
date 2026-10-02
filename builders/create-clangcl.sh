@@ -9,6 +9,10 @@
 # usage: builders/create-clangcl.sh <pve-host> <vmid> <storage> [cores] [mem-MB]
 #   e.g. builders/create-clangcl.sh root@192.0.2.10 140 fast 16 32768
 # Running xwin accepts the Microsoft CRT/SDK license (--accept-license).
+# SHARE=<host path> bind-mounts it at /share, where farm/build.sh drops builds:
+#   /mnt/pve/scratch/work on pve-a, /tank/scratch/work on pve-b.
+# Its owner must be 100000 (the container's root). Then add the builder to
+# farm/builders as root@builder-clangcl-<vmid>.
 set -e
 NETLAB=$(cd "$(dirname "$0")/.." && pwd)
 PVE=$1 ID=$2 STORE=$3 CORES=${4:-16} MEM=${5:-32768}
@@ -22,7 +26,8 @@ pct create $ID local:vztmpl/debian-13-standard_13.0-0_amd64.tar.zst \
   --rootfs $STORE:64 --net0 name=eth0,bridge=vmbr0,ip=dhcp \
   --nameserver "192.0.2.1 1.1.1.1" --unprivileged 1 --features nesting=1 \
   --ssh-public-keys /root/.ssh/authorized_keys \
-  --description "build farm: clang-cl + xwin (builders/create-clangcl.sh)"
+  --description "build farm: clang-cl + xwin (builders/create-clangcl.sh)" \
+  ${SHARE:+--mp0 $SHARE,mp=/share}
 pct start $ID
 sleep 8
 END

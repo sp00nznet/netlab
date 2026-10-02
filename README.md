@@ -18,6 +18,10 @@ machines and real routers, with nobody at the controllers.
   needs to be driven the same way.
 - **Scenarios:** a Simpsons Arcade online match, host or joiner behind a
   NAT, same script. ([scenarios/simpsons-arcade/](scenarios/simpsons-arcade/README.md))
+- **Build off the workstation:** `farm/build.sh` syncs a game and the
+  repos it builds against to a Linux builder (clang-cl + xwin) and returns
+  the exe to `<game>/build-farm/`. Re-runs send only changed files.
+  ([farm/build.sh](farm/build.sh), [builders/](builders/create-clangcl.sh))
 
 ## Getting started
 
@@ -51,6 +55,9 @@ on your workstation, and root SSH to the Proxmox host.
 | `nat/` | The NAT bridge, and moving the box behind it and back |
 | `servers/` | Game-service servers for the lab (psnr) |
 | `scenarios/` | Multi-instance test runs |
+| `farm/` | `build.sh` and the builder list |
+| `toolsets/<name>/` | How a builder builds one kind of game (`cmake`, `ps3recomp`) |
+| `builders/` | Make a builder LXC, and its clang-cl toolchain file |
 | `docs/` | How driving works; what went wrong building this, and the fixes |
 
 ## License
