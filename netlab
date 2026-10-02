@@ -1,0 +1,226 @@
+#!/bin/bash
+# netlab: build, run and ship your projects through the farm, from a terminal
+# or an agent. Each project is one recipe (projects/<name>.env, or
+# local/projects/<name>.env for ones you don't publish); your machines and
+# checkouts are in local/ (see local.example/).
+#
+#   netlab projects                      the recipes, and where each one's checkout is
+#   netlab build <project> [--slot S] [--ref R] [--full] [-- extra build args]
+#   netlab run   <project> [--on M] [--slot S]   start the last build on machine M
+#   netlab snap  <project> <out.png> [--on M]    a screenshot of its window
+#   netlab stop  <project> [--on M]
+#   netlab ship  <project> <tag> [--slot S]      publish the last build (SHIP in the recipe)
+#   netlab bench <project>               a cold build on each builder of its kind, compared
+#   netlab times [<project>]             the cold build times that place jobs
+#   netlab status                        builders, their load, and the latest jobs
+#   netlab log   [<project>]             the newest job log (of that project)
+#
+# M defaults to "local", this machine. --ref builds a git ref of the checkout.
+set -e -o pipefail
+NETLAB=$(cd "$(dirname "$0")" && pwd)
+LOCAL="$NETLAB/local"
+die() { echo "netlab: $*" >&2; exit 1; }
+
+# The recipe of <project>: local/projects first, then projects/.
+recipe() {
+  local f
+  for f in "$LOCAL/projects/$1.env" "$NETLAB/projects/$1.env"; do
+    [ -f "$f" ] && { RECIPE=$f; return; }
+  done
+  die "no recipe for '$1' (projects/$1.env)"
+}
+load() {
+  recipe "$1"
+  PROJECT=$1 REPO= TOOLSET= BUILDS_ON= BUILD= EXCLUDE= DEPS= BUILD_ARGS= TARGET= KEEP= ARTIFACTS= EXE= RUN= RUN_FILES= PROC= SHIP=none ITCH_TARGET=
+  . "$RECIPE"
+  CHECKOUT=$(checkout "$PROJECT")
+}
+# Where <project> is checked out, from local/checkouts ("<project> <path>").
+checkout() { [ -f "$LOCAL/checkouts" ] && awk -v p="$1" '$1 == p { print $2; exit }' "$LOCAL/checkouts"; }
+
+# A dep in a recipe is another project, as <project>[=<name>]: its checkout if
+# you have one, else its repo, cloned on the builder.
+# It lands as <name> (default <project>), where the game expects ../<name>.
+# local/checkouts picks the checkout: "<this project>:<dep>" first, then
+# <name>, then <project>.
+dep_spec() {
+  local p=${1%%=*} as=${1#*=} d
+  d=$(checkout "$PROJECT:$p"); [ -n "$d" ] || d=$(checkout "$as"); [ -n "$d" ] || d=$(checkout "$p")
+  if [ -n "$d" ]; then echo "$d=$as"; return; fi
+  ( load "$p" >/dev/null; [ -n "$REPO" ] || die "dep $p: no checkout and no REPO"; echo "$REPO=$as" )
+}
+
+# A machine to run on: local/machines/<name>.env (KIND=local|remote, SSH,
+# JUMP, DIR), plus whatever variables its recipes' RUN lines use.
+machine() {
+  MACHINE=${1:-local} KIND=local SSH= JUMP= DIR=
+  [ -f "$LOCAL/machines/$MACHINE.env" ] && . "$LOCAL/machines/$MACHINE.env"
+  [ "$MACHINE" = local ] || [ -f "$LOCAL/machines/$MACHINE.env" ] || die "no machine '$MACHINE' (local/machines/$MACHINE.env)"
+  DIR=${DIR:-C:/netlab}
+}
+rsh() { ssh -o BatchMode=yes -o ConnectTimeout=10 ${JUMP:+-J "$JUMP"} "$SSH" "$@"; }
+rcp() { scp -q -o BatchMode=yes ${JUMP:+-o ProxyJump="$JUMP"} "$@"; }
+winpath() { if command -v cygpath >/dev/null; then cygpath -w "$1"; else echo "$1"; fi; }
+bs() { echo "$1" | tr / '\\'; }   # C:/netlab/x -> C:\netlab\x, for a remote Windows machine
+
+# The folder a project's builds come back to: build-farm[-<slot>] in its
+# checkout, or local/out/<project>[-<slot>] without one.
+outdir() { if [ -n "$CHECKOUT" ]; then echo "$CHECKOUT/build-farm${SLOT:+-$SLOT}"; else echo "$LOCAL/out/$PROJECT${SLOT:+-$SLOT}"; fi; }
+
+cmd=$1; shift || true
+SLOT= REF= FULL= FRESH= ON=
+args=()
+while [ $# -gt 0 ]; do
+  case $1 in
+    --slot) SLOT=$2; shift 2 ;;
+    --ref)  REF=$2; shift 2 ;;
+    --on)   ON=$2; shift 2 ;;
+    --full) FULL=--full; shift ;;
+    --fresh) FRESH=--fresh; shift ;;
+    --) shift; args+=(--); args+=("$@"); break ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- "${args[@]}"
+
+case $cmd in
+projects)
+  for f in "$NETLAB"/projects/*.env "$LOCAL"/projects/*.env; do
+    [ -f "$f" ] || continue
+    p=$(basename "$f" .env)
+    printf '%-24s %-10s %s\n' "$p" "$(. "$f"; echo "$TOOLSET")" "$(checkout "$p" || true)"
+  done ;;
+
+build)
+  [ -n "$1" ] || die "usage: netlab build <project> [--slot S] [--ref R] [-- args]"
+  load "$1"; shift
+  [ "$1" = -- ] && shift
+  src=${CHECKOUT:-$REPO}
+  [ -n "$src" ] || die "$PROJECT: no checkout (local/checkouts) and no REPO"
+  deps=()
+  for d in $DEPS; do deps+=("$(dep_spec "$d")"); done
+  [ -n "$CHECKOUT" ] || export FARM_OUT="$LOCAL/out/$PROJECT"
+  export TARGET KEEP EXCLUDE ARTIFACTS BUILD FARM_KIND=$BUILDS_ON
+  exec "$NETLAB/farm/build.sh" $FULL $FRESH ${SLOT:+--slot "$SLOT"} "$TOOLSET" "$src${REF:+@$REF}" "${deps[@]}" -- $BUILD_ARGS "$@" ;;
+
+run)
+  load "$1"; machine "$ON"
+  out=$(outdir)
+  [ -n "$EXE" ] || die "$PROJECT: the recipe has no EXE"
+  [ -f "$out/$(basename "$EXE")" ] || die "no build of $PROJECT in $out (netlab build $PROJECT)"
+  PROC=${PROC:-$(basename "$EXE" .exe)}
+  case $KIND in
+  local)
+    # Run in the checkout (recipes refer to its files), with the farm's exe,
+    # from a run.cmd next to the build, as on a remote machine.
+    EXE=$(winpath "$out/$(basename "$EXE")")
+    line=$(eval "echo \"$RUN\"")
+    echo "run on $MACHINE: $line"
+    printf '@echo off\r\ncd /d %s\r\n%s > "%s" 2>&1\r\n' "$(winpath "$CHECKOUT")" "$line" "$(winpath "$out/run.log")" > "$out/run.cmd"
+    powershell -NoProfile -Command "Start-Process -FilePath '$(winpath "$out/run.cmd")'" ;;
+  remote)
+    # Copy the build and the repo files the run needs to $DIR/<project>, and
+    # start it from a scheduled task, in the desktop session: a program
+    # started over SSH lands in session 0, with no desktop.
+    rd="$DIR/$PROJECT"
+    rsh "New-Item -ItemType Directory -Force '$rd' | Out-Null"
+    rcp "$out"/* "$SSH:$rd/"
+    for f in $RUN_FILES; do
+      rsh "New-Item -ItemType Directory -Force '$rd/$(dirname "$f")' | Out-Null"
+      rcp "$CHECKOUT/$f" "$SSH:$rd/$f"
+    done
+    EXE=$(bs "$rd/$(basename "$EXE")")
+    line=$(eval "echo \"$RUN\"")
+    echo "run on $MACHINE: $line"
+    printf '@echo off\r\ncd /d %s\r\n%s > run.log 2>&1\r\n' "$(bs "$rd")" "$line" > "${TMPDIR:-/tmp}/netlab-run.cmd"
+    rcp "${TMPDIR:-/tmp}/netlab-run.cmd" "$SSH:$rd/run.cmd"
+    rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$PROJECT' 2>\$null | Out-Null;
+         schtasks /Create /TN 'netlab-$PROJECT' /TR '$(bs "$rd/run.cmd")' /SC ONCE /ST 23:59 /IT /F | Out-Null;
+         schtasks /Run /TN 'netlab-$PROJECT' | Out-Null" ;;
+  esac ;;
+
+stop)
+  load "$1"; machine "$ON"
+  PROC=${PROC:-$(basename "$EXE" .exe)}
+  case $KIND in
+  local)  taskkill //F //IM "$PROC.exe" 2>/dev/null || true ;;
+  remote) rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$PROJECT' 2>\$null | Out-Null" ;;
+  esac ;;
+
+snap)
+  # Only the project's own window (drive/snap-window.ps1), never the whole
+  # desktop of a machine someone works at.
+  load "${1:?usage: netlab snap <project> <out.png> [--on M]}"; out=${2:?usage: netlab snap <project> <out.png> [--on M]}
+  machine "$ON"
+  PROC=${PROC:-$(basename "$EXE" .exe)}
+  case $KIND in
+  local) powershell -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$NETLAB/drive/snap-window.ps1")" "$PROC" "$(winpath "$(cd "$(dirname "$out")" && pwd)/$(basename "$out")")" ;;
+  remote)
+    # The capture has to run in the desktop session too.
+    rcp "$NETLAB/drive/snap-window.ps1" "$SSH:$DIR/snap-window.ps1"
+    rsh "schtasks /Create /TN netlab-snap /TR 'powershell -NoProfile -ExecutionPolicy Bypass -File $(bs "$DIR/snap-window.ps1") $PROC $(bs "$DIR/snap.png")' /SC ONCE /ST 23:59 /IT /F | Out-Null;
+         Remove-Item '$DIR/snap.png' -EA 0; schtasks /Run /TN netlab-snap | Out-Null;
+         for (\$i=0; \$i -lt 50 -and -not (Test-Path '$DIR/snap.png'); \$i++) { Start-Sleep -Milliseconds 200 }"
+    rcp "$SSH:$DIR/snap.png" "$out"; echo "$out" ;;
+  esac ;;
+
+ship)
+  load "$1"; tag=${2:?usage: netlab ship <project> <tag>}
+  out=$(outdir)
+  ls "$out"/* >/dev/null 2>&1 || die "no build of $PROJECT in $out"
+  case $SHIP in
+  github)
+    # A draft release on the project's repo, with the build attached: you
+    # look it over and publish it.
+    gh release create "$tag" "$out"/* --repo "${REPO#https://github.com/}" --draft \
+      --title "$PROJECT $tag" --notes "Built by the netlab farm." ;;
+  lan)
+    # Stays on the LAN (retail-derived builds): the share's releases/.
+    b=$(grep -v '^#' "$NETLAB/farm/builders" | awk 'NF { print $1; exit }')
+    ssh "$b" "mkdir -p /share/releases/$PROJECT/$tag"
+    scp -q "$out"/* "$b:/share/releases/$PROJECT/$tag/"
+    echo "shipped to the share: releases/$PROJECT/$tag" ;;
+  itch)
+    # itch.io through butler, with the tag as the version.
+    command -v butler >/dev/null || die "butler isn't on PATH (https://itch.io/docs/butler/)"
+    [ -n "$ITCH_TARGET" ] || die "$PROJECT: the recipe has no ITCH_TARGET (user/game:channel)"
+    butler push "$out" "$ITCH_TARGET" --userversion "$tag" ;;
+  *) die "$PROJECT doesn't ship (SHIP=$SHIP in its recipe)" ;;
+  esac ;;
+
+bench)
+  # A cold build on every builder of the project's kind, one at a time so
+  # they don't share a node's CPU, in a "bench" slot; the times go into
+  # farm/times, which is what places later builds.
+  load "${1:?usage: netlab bench <project>}"
+  kind=${BUILDS_ON:-$(cat "$NETLAB/toolsets/$TOOLSET/builder")}
+  for b in $(grep -v '^#' "$NETLAB/farm/builders" | awk -v k="$kind" '$2 == k { print $1 }'); do
+    echo "== $b"
+    BUILDER=$b "$0" build "$PROJECT" --slot bench --fresh "$@" 2>&1 | grep -E '^cold build|FAILED:|error:' || true
+  done
+  "$0" times "$PROJECT" ;;
+
+times)
+  # The cold build times the farm places jobs by (farm/times).
+  [ -f "$NETLAB/farm/times" ] || die "no build times yet (farm/times)"
+  awk -v p="${1:-}" '(p == "" || $1 == p || $1 ~ p) { k = $1 " " $2; n[k]++; s[k] += $3; last[k] = $3 }
+    END { for (k in n) printf "%-34s %-30s %8.1fs  (%d cold builds, last %.1fs)\n", substr(k, 1, index(k, " ") - 1), substr(k, index(k, " ") + 1), s[k] / n[k], n[k], last[k] }' \
+    "$NETLAB/farm/times" | sort ;;
+
+status)
+  grep -v '^#' "$NETLAB/farm/builders" 2>/dev/null | while read -r b k _; do
+    [ -n "$b" ] || continue
+    l=$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$b" 'echo "load $(cut -d" " -f1-3 /proc/loadavg), $(nproc) cores, $(free -g | awk "/Mem/ {print \$7}") GB free"' 2>/dev/null || echo unreachable)
+    printf '%-32s %-10s %s\n' "$b" "$k" "$l"
+  done
+  echo; ls -t "$NETLAB/farm/logs" 2>/dev/null | head -8 | while read -r f; do
+    printf '%-60s %s\n' "$f" "$(grep -E '^(build wall|FAILED:)' "$NETLAB/farm/logs/$f" | tail -1)"
+  done ;;
+
+log)
+  f=$(ls -t "$NETLAB/farm/logs"/*${1:+$1}*.log 2>/dev/null | head -1)
+  [ -n "$f" ] || die "no logs${1:+ for $1}"
+  echo "$f"; grep -E '^(builder|sync|clone|job|build wall|drop|->|FAILED:)|error:' "$f" | head -40 ;;
+
+*) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 2 ;;
+esac

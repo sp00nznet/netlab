@@ -1,65 +1,119 @@
 # recomp-netlab
 
-A lab for testing online play of statically recompiled games across real
-machines and real routers, with nobody at the controllers.
+A build farm and test lab you drive from a terminal or an agent. It builds
+your projects on Linux builders (Proxmox containers), runs the result on your
+Windows machines and grabs what's on screen, and ships it. It started with
+statically recompiled games, and builds ordinary software and games the same
+way.
 
-- **Drive games from outside:** press buttons, wait for the game to reach a
-  state, grab what's on screen. On this machine, or on another box over SSH,
-  with the same calls. ([docs/driving.md](docs/driving.md))
-- **A Windows test box with a real GPU:** a Proxmox VM built unattended,
-  with the card passed through, as the second player. ([vm/](vm/README.md))
-- **A home router on demand:** put the test box behind a NAT that behaves
-  like a home router, and bring it back. ([nat/](nat/))
-- **Servers:** deploy a [psnr](https://github.com/sp00nznet/psnr) server to
-  a lab host. ([servers/](servers/))
-- **Recipes per runtime:** how to drive a
-  [ps3recomp](https://github.com/sp00nznet/ps3recomp) title
-  ([games/ps3recomp/](games/ps3recomp/README.md)), and what any other runtime
-  needs to be driven the same way.
-- **Scenarios:** a Simpsons Arcade online match, host or joiner behind a
-  NAT, same script. ([scenarios/simpsons-arcade/](scenarios/simpsons-arcade/README.md))
-- **Build off the workstation:** `farm/build.sh` syncs a game and the
-  repos it builds against to a Linux builder (clang-cl + xwin) and returns
-  the exe to `<game>/build-farm/`. Re-runs send only changed files. For A/B,
-  any repo can be a git ref (`dir@ref`) or another checkout standing in
-  (`dir=name`), each variant in its own slot (`--slot b`).
-  ([farm/build.sh](farm/build.sh), [builders/](builders/create-clangcl.sh))
+```sh
+./netlab build encarta        # sync the checkout to the best builder, build, bring the exe back
+./netlab run encarta          # start it on this machine (or --on testbox)
+./netlab snap encarta a.png   # a screenshot of its window
+./netlab ship encarta v0.4    # publish it (a GitHub draft release, itch.io, or the LAN share)
+```
 
-## Getting started
+- **One recipe per project** says how to build, run and ship it:
+  [`projects/`](projects/). Recipes hold no paths or hosts; your checkouts
+  and machines live in `local/`.
+- **Builders by kind:** clang-cl + xwin (MSVC-ABI Windows programs, built on
+  Linux), Godot (headless export), Node (Electron, web). A builder is one
+  `setup.sh` ([`builders/`](builders/)); a new stack is a new folder.
+- **The fastest builder that isn't busy:** every cold build's time is
+  recorded per project and builder. A job goes where (its time there) ×
+  (1 + load per core) is lowest. `netlab bench <project>` measures every
+  builder of its kind.
+- **A/B against other checkouts:** build a git ref (`--ref`), put another
+  checkout in place of a dependency or a submodule, and keep each variant in
+  its own slot (`--slot b`) so neither build dir is thrown away.
+  ([farm/build.sh](farm/build.sh))
+- **Drive games from outside:** press buttons, wait for a log line, grab
+  frames, on this machine or a test box over SSH
+  ([docs/driving.md](docs/driving.md)). Plus a Windows test VM with a real
+  GPU ([vm/](vm/README.md)), a home-router NAT on demand ([nat/](nat/)), and
+  multi-player scenarios ([scenarios/](scenarios/simpsons-arcade/README.md)).
 
-1. `cp lab.env.example lab.env` and fill in your Proxmox host, VM and GPU.
-2. Build the test box: [vm/README.md](vm/README.md).
-3. Describe your instances: copy
-   [`drive/inst/local.env.example`](drive/inst/local.env.example) and
-   [`drive/inst/remote.env.example`](drive/inst/remote.env.example) to
-   `drive/inst/a.env` and `drive/inst/b.env`.
-4. Try it by hand:
-   ```sh
-   drive/drive.sh start b
-   drive/drive.sh wait b "ManagerGetStatus()" 120
-   drive/drive.sh snap b b.png
-   ```
-5. Run a scenario:
-   ```sh
-   scenarios/simpsons-arcade/match.sh a b captures/
-   ```
+## Example: Encarta 97, from an agent
 
-Needs Git Bash (or any POSIX shell) with `ssh`, `scp`, `python` and `ffmpeg`
-on your workstation, and root SSH to the Proxmox host.
+[encarta](https://github.com/sp00nznet/encarta) is a static recompilation:
+40 MB of lifted C plus a harness, built for 32-bit Windows. Its recipe,
+[`projects/encarta.env`](projects/encarta.env):
+
+```sh
+REPO=https://github.com/sp00nznet/encarta
+TOOLSET=cmake                      # CMake + clang-cl on a clangcl builder
+BUILD_ARGS="-DXWIN_ARCH=x86"
+TARGET=recomp_enc97_run
+ARTIFACTS=build/tools/recomp/recomp_enc97_run.exe
+EXE=recomp_enc97_run.exe
+RUN='powershell -NoProfile -ExecutionPolicy Bypass -File tools\localcontent\run-encarta.ps1 -Content $ENCARTA_CONTENT ${ENCARTA_APP:+-AppDir $ENCARTA_APP} -Harness $EXE -Hold'
+SHIP=lan                           # built from a retail product: stays on the LAN
+```
+
+1. **Build.** `./netlab build encarta` sends the checkout (only files changed
+   since last time), builds it on the clangcl builder expected to finish
+   first, and puts `recomp_enc97_run.exe` in the checkout's `build-farm/`.
+2. **Run.** `./netlab run encarta` writes a `run.cmd` next to the build and
+   starts it in the checkout. `$ENCARTA_CONTENT` comes from the machine's file,
+   `local/machines/local.env`. With `--on testbox`, the build and a `run.cmd`
+   are copied to the test box and started in its desktop session.
+3. **Look.** `./netlab snap encarta enc.png` captures only Encarta's window,
+   never the rest of the desktop. `./netlab stop encarta` ends it.
+4. **Ship.** `./netlab ship encarta v0.4` copies the build to the share's
+   `releases/encarta/v0.4/`. A project with `SHIP=github` gets a draft
+   GitHub release instead, and `SHIP=itch` goes through butler.
+
+## Recipes
+
+A recipe is a shell file, `projects/<name>.env`. A project you don't publish
+goes in `local/projects/<name>.env` instead, which wins over `projects/`.
+
+| Field | What |
+|---|---|
+| `REPO` | Its git URL. Without a local checkout, the builder clones it |
+| `TOOLSET` | `cmake` (clang-cl), `ps3recomp`, or `script` |
+| `BUILDS_ON` | The builder kind, for `script` (`godot`, `node`, ...) |
+| `BUILD` | The build command, for `script`, run in the project on the builder |
+| `BUILD_ARGS`, `TARGET` | Extra CMake arguments; one CMake target |
+| `DEPS` | Other projects it builds against: `xboxrecomp`, `pcrecomp=tools` (land as `../tools`) |
+| `ARTIFACTS` | Globs for what comes back, if not the toolset's default |
+| `KEEP`, `EXCLUDE` | Top-level dirs to send that are skipped by default; more paths to skip |
+| `EXE`, `RUN`, `RUN_FILES`, `PROC` | What to run, the command line (`$EXE` and the machine's variables expand), repo files it needs on a remote machine, the process name |
+| `SHIP`, `ITCH_TARGET` | `github`, `itch` (`user/game:channel`), `lan`, or `none` |
+
+The farm never sends `.git`, build output, retail images, `node_modules`,
+`.godot`, Unity's `Library` or cargo's `target`; the builder makes its own.
+
+## Setting up
+
+1. **Your lab:** `cp lab.env.example lab.env` (the Proxmox host, the test VM),
+   then `cp -r local.example local` and fill in `local/checkouts` (where each
+   project is checked out) and `local/machines/` (where to run things).
+2. **Builders:** `builders/create.sh <kind> <proxmox-host> <vmid> <storage>`
+   makes a Debian container and runs `builders/<kind>/setup.sh` in it. List it
+   in `farm/builders` (from `farm/builders.example`) as `<ssh target> <kind>`.
+   `SHARE=<host path>` gives it a share at `/share`, where every build is
+   dropped.
+3. **Agents:** the [netlab skill](.claude/skills/netlab/SKILL.md) teaches
+   Claude the commands. In this repo it loads on its own; to use it from
+   other projects, copy or link it into `~/.claude/skills/`.
+
+Needs Git Bash (or any POSIX shell) with `ssh`, `scp`, `tar` and `python` on
+your workstation, root SSH to the Proxmox hosts, and SSH to the builders.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `drive/` | The driving library (`lib.sh`), its CLI (`drive.sh`), instance files |
-| `games/<runtime>/` | How to launch and drive one runtime's games, locally and on the box |
-| `vm/` | Build the Windows GPU test box on Proxmox |
-| `nat/` | The NAT bridge, and moving the box behind it and back |
-| `servers/` | Game-service servers for the lab (psnr) |
-| `scenarios/` | Multi-instance test runs |
-| `farm/` | `build.sh` and the builder list |
-| `toolsets/<name>/` | How a builder builds one kind of game (`cmake`, `ps3recomp`) |
-| `builders/` | Make a builder LXC, and its clang-cl toolchain file |
+| `netlab` | The CLI: build, run, snap, stop, ship, bench, times, status, log |
+| `projects/` | Recipes (`local/projects/` for your private ones) |
+| `farm/` | `build.sh` (sync, place, build, collect) and the builder list |
+| `toolsets/<name>/` | How a builder builds one kind of project |
+| `builders/<kind>/` | What a builder of that kind has (`setup.sh`); `create.sh` makes one |
+| `drive/` | Drive running games (`lib.sh`, `drive.sh`), and window captures |
+| `games/<runtime>/` | How to launch and drive one runtime's games |
+| `vm/`, `nat/`, `servers/`, `scenarios/` | The test VM, the NAT bridge, lab servers, multi-player runs |
+| `local.example/` | What `local/` holds; `local/` itself is git-ignored |
 | `docs/` | How driving works; what went wrong building this, and the fixes |
 
 ## License

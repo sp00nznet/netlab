@@ -14,3 +14,8 @@ __pycache__/
 # Farm state and job logs
 farm/.state/
 farm/logs/
+
+# Your own lab: inventory, plans, checkouts (never published)
+local/
+farm/builders
+farm/times

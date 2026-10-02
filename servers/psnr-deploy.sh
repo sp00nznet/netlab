@@ -3,7 +3,7 @@
 # Build psnr (https://github.com/sp00nznet/psnr) for Linux and run it on a
 # lab host, in the background, replacing one already running there:
 #
-#   servers/psnr-deploy.sh ~/src/psnr root@192.0.2.11 -relay
+#   servers/psnr-deploy.sh ~/src/psnr root@<lab-host> -relay
 #
 # Put it where both sides of a test can reach it: for a player behind the
 # NAT bridge, a host on the LAN, not the NAT host itself. Status page:

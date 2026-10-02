@@ -3,7 +3,7 @@
 #
 #   scp games/ps3recomp/install-remote.ps1 Admin@box:C:/netlab/
 #   ssh Admin@box "powershell -ExecutionPolicy Bypass -File C:/netlab/install-remote.ps1 -GameDir C:/netlab/simpsons \
-#       -Exe build/simpsons.exe -Elf vfs/PS3_GAME/USRDIR/EBOOT.elf -Psnr 192.0.2.11 -Player bart"
+#       -Exe build/simpsons.exe -Elf vfs/PS3_GAME/USRDIR/EBOOT.elf -Psnr <psnr-host> -Player player2"
 #
 # It writes C:\netlab\run-game.cmd (the game with the driving environment)
 # and a scheduled task that runs it in the logged-on desktop session: a game
