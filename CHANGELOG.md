@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The loop: `netlab play` (steps files of keys, clicks, typing, menus, pad
+  presses, window and log expectations, window screenshots; `drive/play.ps1`
+  on Windows, `drive/play.sh` on Linux), `netlab qa` (the project's own check
+  as `QA`, `QA_SKIP` so a skip isn't a pass, `QA_STEPS`, `QA_ARTIFACTS`, a
+  report per run) and `netlab check` (build, then qa).
+- Linux test machines: `vm/create-linux-vm.sh` (Debian 13 + Xfce that logs
+  itself on, xdotool, ImageMagick, FUSE), `KIND=linux` machines, and the
+  recipes' `*_LINUX` fields. connectty's AppImage runs and passes QA there.
+- `docs/qa.md`: the checks the projects already have, and how they plug in.
 - `netlab`: one CLI to build, run, screenshot, stop and ship any project from
   its recipe (`projects/`), plus `bench`, `times`, `status` and `log`.
 - `farm/build.sh`: builds on Linux builders, sending only changed files.

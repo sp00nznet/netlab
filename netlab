@@ -4,18 +4,24 @@
 # local/projects/<name>.env for ones you don't publish); your machines and
 # checkouts are in local/ (see local.example/).
 #
+# The loop: build -> run -> play -> qa -> (fix, build again) -> ship.
+#
 #   netlab projects                      the recipes, and where each one's checkout is
 #   netlab build <project> [--slot S] [--ref R] [--full] [-- extra build args]
 #   netlab run   <project> [--on M] [--slot S]   start the last build on machine M
+#   netlab play  <project> <steps> [--on M] [--out D]   keys, clicks, menus, pad, expects, snaps
 #   netlab snap  <project> <out.png> [--on M]    a screenshot of its window
 #   netlab stop  <project> [--on M]
+#   netlab qa    <project> [--on M] [--slot S]   its checks (QA, QA_STEPS): PASS/FAIL/SKIP + a report
+#   netlab check <project> [--on M]              build, then qa
 #   netlab ship  <project> <tag> [--slot S]      publish the last build (SHIP in the recipe)
 #   netlab bench <project>               a cold build on each builder of its kind, compared
 #   netlab times [<project>]             the cold build times that place jobs
 #   netlab status                        builders, their load, and the latest jobs
 #   netlab log   [<project>]             the newest job log (of that project)
 #
-# M defaults to "local", this machine. --ref builds a git ref of the checkout.
+# M defaults to "local", this machine (Windows); local/machines/<M>.env names
+# the others (Windows or Linux, over SSH). --ref builds a git ref of the checkout.
 set -e -o pipefail
 NETLAB=$(cd "$(dirname "$0")" && pwd)
 LOCAL="$NETLAB/local"
@@ -31,7 +37,8 @@ recipe() {
 }
 load() {
   recipe "$1"
-  PROJECT=$1 REPO= TOOLSET= BUILDS_ON= BUILD= EXCLUDE= DEPS= BUILD_ARGS= TARGET= KEEP= ARTIFACTS= EXE= RUN= RUN_FILES= PROC= SHIP=none ITCH_TARGET=
+  PROJECT=$1 REPO= TOOLSET= BUILDS_ON= BUILD= EXCLUDE= DEPS= BUILD_ARGS= TARGET= KEEP= ARTIFACTS= SHIP=none ITCH_TARGET=
+  EXE= RUN= RUN_FILES= PROC= WINDOW= QA= QA_STEPS= QA_SKIP= QA_ARTIFACTS= EXE_LINUX= RUN_LINUX= PROC_LINUX= QA_LINUX= QA_STEPS_LINUX=
   . "$RECIPE"
   CHECKOUT=$(checkout "$PROJECT")
 }
@@ -50,13 +57,26 @@ dep_spec() {
   ( load "$p" >/dev/null; [ -n "$REPO" ] || die "dep $p: no checkout and no REPO"; echo "$REPO=$as" )
 }
 
-# A machine to run on: local/machines/<name>.env (KIND=local|remote, SSH,
-# JUMP, DIR), plus whatever variables its recipes' RUN lines use.
+# A machine to run on: local/machines/<name>.env, with KIND=local (this
+# Windows machine), remote (Windows over SSH) or linux (the Linux box over
+# SSH); SSH, JUMP and DIR for the remote ones, and whatever variables its
+# recipes' RUN lines use. On linux, the recipe's *_LINUX fields apply.
 machine() {
-  MACHINE=${1:-local} KIND=local SSH= JUMP= DIR=
+  MACHINE=${1:-local} KIND=local SSH= JUMP= DIR= PAD=
   [ -f "$LOCAL/machines/$MACHINE.env" ] && . "$LOCAL/machines/$MACHINE.env"
   [ "$MACHINE" = local ] || [ -f "$LOCAL/machines/$MACHINE.env" ] || die "no machine '$MACHINE' (local/machines/$MACHINE.env)"
-  DIR=${DIR:-C:/netlab}
+  if [ "$KIND" = linux ]; then
+    DIR=${DIR:-netlab}   # relative to the user's home
+    EXE=$EXE_LINUX RUN=$RUN_LINUX QA=$QA_LINUX QA_STEPS=$QA_STEPS_LINUX PROC=$PROC_LINUX
+  else
+    DIR=${DIR:-C:/netlab}
+  fi
+  RD="$DIR/$PROJECT"   # where a remote machine keeps the project
+  out=$(outdir)
+  [ -n "$EXE" ] || die "$PROJECT: the recipe has nothing to run on a $KIND machine (EXE / EXE_LINUX)"
+  NAME=$(cd "$out" 2>/dev/null && ls -d $EXE 2>/dev/null | head -1)   # EXE may be a glob (an AppImage's version)
+  [ -n "$NAME" ] || die "no build of $PROJECT in $out (netlab build $PROJECT)"
+  PROC=${PROC:-$(basename "$NAME" | sed -E 's/\.(exe|AppImage)$//')}
 }
 rsh() { ssh -o BatchMode=yes -o ConnectTimeout=10 ${JUMP:+-J "$JUMP"} "$SSH" "$@"; }
 rcp() { scp -q -o BatchMode=yes ${JUMP:+-o ProxyJump="$JUMP"} "$@"; }
@@ -67,8 +87,119 @@ bs() { echo "$1" | tr / '\\'; }   # C:/netlab/x -> C:\netlab\x, for a remote Win
 # checkout, or local/out/<project>[-<slot>] without one.
 outdir() { if [ -n "$CHECKOUT" ]; then echo "$CHECKOUT/build-farm${SLOT:+-$SLOT}"; else echo "$LOCAL/out/$PROJECT${SLOT:+-$SLOT}"; fi; }
 
+# Put the build (and the repo files RUN_FILES names) in $RD on a remote machine.
+push() {
+  case $KIND in
+  remote) rsh "New-Item -ItemType Directory -Force '$RD' | Out-Null" ;;
+  linux)  rsh "mkdir -p '$RD'" ;;
+  esac
+  rcp "$out"/* "$SSH:$RD/"
+  for f in $RUN_FILES; do
+    case $KIND in
+    remote) rsh "New-Item -ItemType Directory -Force '$RD/$(dirname "$f")' | Out-Null" ;;
+    linux)  rsh "mkdir -p '$RD/$(dirname "$f")'" ;;
+    esac
+    rcp "$CHECKOUT/$f" "$SSH:$RD/$f"
+  done
+}
+# A recipe line ($RUN or $QA) with $EXE and the machine's variables in it.
+expand() { eval "echo \"$1\""; }
+# A pkill -f pattern that matches the program but not the ssh command carrying
+# it: [C]onnectty.
+selfsafe() { echo "[${1:0:1}]${1:1}"; }
+
+# Start the last build on the machine, in its desktop session.
+start() {
+  [ -n "$RUN" ] || die "$PROJECT: the recipe has no RUN for a $KIND machine"
+  case $KIND in
+  local)
+    # In the checkout (recipes refer to its files), with the farm's exe, from
+    # a run.cmd next to the build, as on a remote machine.
+    EXE=$(winpath "$out/$NAME"); line=$(expand "$RUN")
+    echo "run on $MACHINE: $line"
+    printf '@echo off\r\ncd /d %s\r\n%s > "%s" 2>&1\r\n' "$(winpath "$CHECKOUT")" "$line" "$(winpath "$out/run.log")" > "$out/run.cmd"
+    powershell -NoProfile -Command "Start-Process -FilePath '$(winpath "$out/run.cmd")'" ;;
+  remote)
+    # From a scheduled task: a program started over SSH lands in session 0,
+    # with no desktop.
+    push
+    EXE=$(bs "$RD/$NAME"); line=$(expand "$RUN")
+    echo "run on $MACHINE: $line"
+    printf '@echo off\r\ncd /d %s\r\n%s > run.log 2>&1\r\n' "$(bs "$RD")" "$line" > "${TMPDIR:-/tmp}/netlab-run.cmd"
+    rcp "${TMPDIR:-/tmp}/netlab-run.cmd" "$SSH:$RD/run.cmd"
+    rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$PROJECT' 2>\$null | Out-Null;
+         schtasks /Create /TN 'netlab-$PROJECT' /TR '$(bs "$RD/run.cmd")' /SC ONCE /ST 23:59 /IT /F | Out-Null;
+         schtasks /Run /TN 'netlab-$PROJECT' | Out-Null" ;;
+  linux)
+    # On the logged-on desktop (:0), detached from the SSH session.
+    push
+    EXE="./$NAME"; line=$(expand "$RUN")
+    echo "run on $MACHINE: $line"
+    printf '#!/bin/bash\ncd "$(dirname "$0")"\nchmod +x %q 2>/dev/null\nexec %s > run.log 2>&1\n' "$NAME" "$line" > "${TMPDIR:-/tmp}/netlab-run.sh"
+    rcp "${TMPDIR:-/tmp}/netlab-run.sh" "$SSH:$RD/run.sh"
+    rsh "pkill -f '$(selfsafe "$PROC")' || true; cd '$RD' && DISPLAY=:0 XAUTHORITY=\$HOME/.Xauthority setsid -f bash run.sh </dev/null >/dev/null 2>&1" ;;
+  esac
+}
+
+# Play a steps file against the running program (drive/play.ps1 or
+# drive/play.sh, on the machine), into the local folder <dest>. Its exit
+# code is the steps' result.
+play() {
+  local steps=$1 dest=$2 rc=0
+  mkdir -p "$dest"
+  case $KIND in
+  local)
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$NETLAB/drive/play.ps1")" \
+      -Steps "$(winpath "$steps")" -Out "$(winpath "$dest")" -Window "$WINDOW" -Proc "$PROC" \
+      -Log "$(winpath "$out/run.log")" -Pad "$PAD" || rc=$? ;;
+  remote)
+    # In the desktop session too: a task runs play.cmd, and we wait for it.
+    rcp "$NETLAB/drive/play.ps1" "$SSH:$RD/play.ps1"; rcp "$steps" "$SSH:$RD/steps.txt"
+    printf '@echo off\r\ncd /d %s\r\nrmdir /s /q play-out 2>nul\r\npowershell -NoProfile -ExecutionPolicy Bypass -File play.ps1 -Steps steps.txt -Out play-out -Window "%s" -Proc "%s" -Log run.log -Pad "%s" > play.log 2>&1\r\necho %%errorlevel%% > play.done\r\n' \
+      "$(bs "$RD")" "$WINDOW" "$PROC" "$PAD" > "${TMPDIR:-/tmp}/netlab-play.cmd"
+    rcp "${TMPDIR:-/tmp}/netlab-play.cmd" "$SSH:$RD/play.cmd"
+    rsh "Remove-Item '$RD/play.done' -EA 0; schtasks /Create /TN netlab-play /TR '$(bs "$RD/play.cmd")' /SC ONCE /ST 23:59 /IT /F | Out-Null; schtasks /Run /TN netlab-play | Out-Null"
+    until rsh "if (Test-Path '$RD/play.done') { exit 0 } else { exit 1 }" 2>/dev/null; do sleep 2; done
+    rc=$(rsh "(Get-Content '$RD/play.done').Trim()" | tr -d '\r ')
+    rcp "$SSH:$RD/play.log" "$dest/play.log"; cat "$dest/play.log"
+    rcp "$SSH:$RD/play-out/*" "$dest/" 2>/dev/null || true ;;
+  linux)
+    rcp "$NETLAB/drive/play.sh" "$SSH:$RD/play.sh"; rcp "$steps" "$SSH:$RD/steps.txt"
+    rsh "cd '$RD' && rm -rf play-out && PAD='$PAD' bash play.sh steps.txt play-out '$WINDOW' '$PROC' run.log" || rc=$?
+    rcp "$SSH:$RD/play-out/*" "$dest/" 2>/dev/null || true ;;
+  esac
+  return "$rc"
+}
+
+# Run the recipe's QA command on the machine and wait for it; its output goes
+# to <log>, its exit code is the result.
+qa_cmd() {
+  local log=$1
+  case $KIND in
+  local)
+    EXE=$(winpath "$out/$NAME"); line=$(expand "$QA")
+    printf '@echo off\r\ncd /d %s\r\n%s\r\n' "$(winpath "$CHECKOUT")" "$line" > "$out/qa.cmd"
+    powershell -NoProfile -Command "& '$(winpath "$out/qa.cmd")'; exit \$LASTEXITCODE" > "$log" 2>&1 ;;
+  remote)
+    push; EXE=$(bs "$RD/$NAME"); line=$(expand "$QA")
+    printf '@echo off\r\ncd /d %s\r\n%s\r\n' "$(bs "$RD")" "$line" > "${TMPDIR:-/tmp}/netlab-qa.cmd"
+    rcp "${TMPDIR:-/tmp}/netlab-qa.cmd" "$SSH:$RD/qa.cmd"
+    rsh "& '$(bs "$RD/qa.cmd")'; exit \$LASTEXITCODE" > "$log" 2>&1 ;;
+  linux)
+    push; EXE="./$NAME"; line=$(expand "$QA")
+    rsh "cd '$RD' && chmod +x '$NAME' && DISPLAY=:0 XAUTHORITY=\$HOME/.Xauthority bash -c $(printf %q "$line")" > "$log" 2>&1 ;;
+  esac
+}
+# The program's run.log, into the report.
+fetch_log() {
+  case $KIND in
+  local) cp "$out/run.log" "$1" 2>/dev/null || true ;;
+  *)     rcp "$SSH:$RD/run.log" "$1" 2>/dev/null || true ;;
+  esac
+}
+
 cmd=$1; shift || true
-SLOT= REF= FULL= FRESH= ON=
+SLOT= REF= FULL= FRESH= ON= OUT=
 args=()
 while [ $# -gt 0 ]; do
   case $1 in
@@ -77,6 +208,7 @@ while [ $# -gt 0 ]; do
     --on)   ON=$2; shift 2 ;;
     --full) FULL=--full; shift ;;
     --fresh) FRESH=--fresh; shift ;;
+    --out)  OUT=$2; shift 2 ;;
     --) shift; args+=(--); args+=("$@"); break ;;
     *) args+=("$1"); shift ;;
   esac
@@ -105,64 +237,75 @@ build)
 
 run)
   load "$1"; machine "$ON"
-  out=$(outdir)
-  [ -n "$EXE" ] || die "$PROJECT: the recipe has no EXE"
-  [ -f "$out/$(basename "$EXE")" ] || die "no build of $PROJECT in $out (netlab build $PROJECT)"
-  PROC=${PROC:-$(basename "$EXE" .exe)}
-  case $KIND in
-  local)
-    # Run in the checkout (recipes refer to its files), with the farm's exe,
-    # from a run.cmd next to the build, as on a remote machine.
-    EXE=$(winpath "$out/$(basename "$EXE")")
-    line=$(eval "echo \"$RUN\"")
-    echo "run on $MACHINE: $line"
-    printf '@echo off\r\ncd /d %s\r\n%s > "%s" 2>&1\r\n' "$(winpath "$CHECKOUT")" "$line" "$(winpath "$out/run.log")" > "$out/run.cmd"
-    powershell -NoProfile -Command "Start-Process -FilePath '$(winpath "$out/run.cmd")'" ;;
-  remote)
-    # Copy the build and the repo files the run needs to $DIR/<project>, and
-    # start it from a scheduled task, in the desktop session: a program
-    # started over SSH lands in session 0, with no desktop.
-    rd="$DIR/$PROJECT"
-    rsh "New-Item -ItemType Directory -Force '$rd' | Out-Null"
-    rcp "$out"/* "$SSH:$rd/"
-    for f in $RUN_FILES; do
-      rsh "New-Item -ItemType Directory -Force '$rd/$(dirname "$f")' | Out-Null"
-      rcp "$CHECKOUT/$f" "$SSH:$rd/$f"
-    done
-    EXE=$(bs "$rd/$(basename "$EXE")")
-    line=$(eval "echo \"$RUN\"")
-    echo "run on $MACHINE: $line"
-    printf '@echo off\r\ncd /d %s\r\n%s > run.log 2>&1\r\n' "$(bs "$rd")" "$line" > "${TMPDIR:-/tmp}/netlab-run.cmd"
-    rcp "${TMPDIR:-/tmp}/netlab-run.cmd" "$SSH:$rd/run.cmd"
-    rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$PROJECT' 2>\$null | Out-Null;
-         schtasks /Create /TN 'netlab-$PROJECT' /TR '$(bs "$rd/run.cmd")' /SC ONCE /ST 23:59 /IT /F | Out-Null;
-         schtasks /Run /TN 'netlab-$PROJECT' | Out-Null" ;;
-  esac ;;
+  start ;;
 
 stop)
   load "$1"; machine "$ON"
-  PROC=${PROC:-$(basename "$EXE" .exe)}
   case $KIND in
   local)  taskkill //F //IM "$PROC.exe" 2>/dev/null || true ;;
   remote) rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$PROJECT' 2>\$null | Out-Null" ;;
+  linux)  rsh "pkill -f '$(selfsafe "$PROC")' || true" ;;
   esac ;;
 
+play)
+  load "${1:?usage: netlab play <project> <steps> [--on M] [--out D]}"; machine "$ON"
+  steps=${2:?usage: netlab play <project> <steps> [--on M] [--out D]}
+  dest=${OUT:-$LOCAL/qa/$PROJECT/$(date +%Y%m%d-%H%M%S)}
+  rc=0; play "$steps" "$dest" || rc=$?
+  echo "-> $dest"; exit $rc ;;
+
 snap)
-  # Only the project's own window (drive/snap-window.ps1), never the whole
-  # desktop of a machine someone works at.
-  load "${1:?usage: netlab snap <project> <out.png> [--on M]}"; out=${2:?usage: netlab snap <project> <out.png> [--on M]}
-  machine "$ON"
-  PROC=${PROC:-$(basename "$EXE" .exe)}
-  case $KIND in
-  local) powershell -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$NETLAB/drive/snap-window.ps1")" "$PROC" "$(winpath "$(cd "$(dirname "$out")" && pwd)/$(basename "$out")")" ;;
-  remote)
-    # The capture has to run in the desktop session too.
-    rcp "$NETLAB/drive/snap-window.ps1" "$SSH:$DIR/snap-window.ps1"
-    rsh "schtasks /Create /TN netlab-snap /TR 'powershell -NoProfile -ExecutionPolicy Bypass -File $(bs "$DIR/snap-window.ps1") $PROC $(bs "$DIR/snap.png")' /SC ONCE /ST 23:59 /IT /F | Out-Null;
-         Remove-Item '$DIR/snap.png' -EA 0; schtasks /Run /TN netlab-snap | Out-Null;
-         for (\$i=0; \$i -lt 50 -and -not (Test-Path '$DIR/snap.png'); \$i++) { Start-Sleep -Milliseconds 200 }"
-    rcp "$SSH:$DIR/snap.png" "$out"; echo "$out" ;;
-  esac ;;
+  # Only the project's own window, never the whole desktop of a machine
+  # someone works at: a one-step play.
+  load "${1:?usage: netlab snap <project> <out.png> [--on M]}"; machine "$ON"
+  dest=${2:?usage: netlab snap <project> <out.png> [--on M]}
+  t=$(mktemp -d); echo "snap $(basename "$dest")" > "$t/steps"
+  play "$t/steps" "$t/out" >/dev/null || die "no window for $PROC on $MACHINE"
+  mv "$t/out/$(basename "$dest")" "$dest"; rm -rf "$t"; echo "$dest" ;;
+
+qa)
+  # The project's checks, against its last build: QA, a command whose exit
+  # code decides (its own self-test or conformance harness), and QA_STEPS, a
+  # steps file played against it while it runs. Everything lands in a report
+  # under local/qa/<project>/.
+  load "${1:?usage: netlab qa <project> [--on M]}"; machine "$ON"
+  [ -n "$QA$QA_STEPS" ] || die "$PROJECT: the recipe has no QA or QA_STEPS for a $KIND machine"
+  dest=${OUT:-$LOCAL/qa/$PROJECT/$(date +%Y%m%d-%H%M%S)}; mkdir -p "$dest"
+  result=PASS
+  if [ -n "$QA" ]; then
+    echo "== qa: $QA"
+    rc=0; qa_cmd "$dest/qa.log" || rc=$?
+    grep -aE '^\s*(ok|PASS|FAIL|SKIP|pass|fail|skip)\b|\b(passed|failed|skipped|SKIPPED)\b' "$dest/qa.log" | tail -20 || true
+    # A harness that skips a check (no disc, no toolchain) still exits 0, and
+    # a skip isn't a pass: QA_SKIP (a regex) catches its way of saying so.
+    if [ $rc -ne 0 ]; then result=FAIL; echo "exit $rc" >> "$dest/qa.log"
+    elif [ -n "$QA_SKIP" ] && grep -aqE "$QA_SKIP" "$dest/qa.log"; then result=SKIP; fi
+  fi
+  if [ -n "$QA_STEPS" ]; then
+    case $QA_STEPS in /*|?:*) st=$QA_STEPS ;; *) st="$NETLAB/$QA_STEPS" ;; esac
+    echo "== qa: $QA_STEPS"
+    start
+    play "$st" "$dest" | tee "$dest/play.log" || result=FAIL
+    fetch_log "$dest/run.log"
+    "$0" stop "$PROJECT" --on "$MACHINE" >/dev/null 2>&1 || true
+  fi
+  # QA_ARTIFACTS: what the checks left behind (their logs, frames, reports),
+  # relative to where they ran.
+  for g in $QA_ARTIFACTS; do
+    case $KIND in
+    local) (cd "$CHECKOUT" && cp -r $g "$dest/" 2>/dev/null) || true ;;
+    *)     rcp -r "$SSH:$RD/$g" "$dest/" 2>/dev/null || true ;;
+    esac
+  done
+  echo "$result" > "$dest/result"
+  echo "$result: $PROJECT on $MACHINE -> $dest"
+  case $result in PASS) exit 0 ;; SKIP) exit 3 ;; *) exit 1 ;; esac ;;
+
+check)
+  # Build, then QA: the inner loop after a change.
+  load "${1:?usage: netlab check <project> [--on M]}"
+  "$0" build "$PROJECT" ${SLOT:+--slot "$SLOT"} | grep -E '^(builder|sync|clone|build wall|cold build|->|FAILED:)|error:'
+  "$0" qa "$PROJECT" ${ON:+--on "$ON"} ${SLOT:+--slot "$SLOT"} ;;
 
 ship)
   load "$1"; tag=${2:?usage: netlab ship <project> <tag>}
@@ -222,5 +365,5 @@ log)
   [ -n "$f" ] || die "no logs${1:+ for $1}"
   echo "$f"; grep -E '^(builder|sync|clone|job|build wall|drop|->|FAILED:)|error:' "$f" | head -40 ;;
 
-*) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 2 ;;
+*) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; [ -z "$cmd" ] || exit 2 ;;
 esac
