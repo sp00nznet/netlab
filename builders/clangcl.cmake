@@ -24,8 +24,12 @@ set(CMAKE_RC_COMPILER llvm-rc)
 set(CMAKE_MT llvm-mt)
 
 set(_inc "/imsvc${XWIN}/crt/include /imsvc${XWIN}/sdk/include/ucrt /imsvc${XWIN}/sdk/include/um /imsvc${XWIN}/sdk/include/shared")
-set(CMAKE_C_FLAGS_INIT "--target=${_target} ${_inc}")
-set(CMAKE_CXX_FLAGS_INIT "--target=${_target} ${_inc}")
+# MSVC only warns (C4013) on a call to an undeclared function, and the games
+# rely on that (mariokartdx synthpad.c); clang 16+ makes it an error.
+set(CMAKE_C_FLAGS_INIT "--target=${_target} ${_inc} -Wno-error=implicit-function-declaration")
+# MSVC has no fold-expression nesting limit; clang's is 256 (androidrecomp's
+# jni_env.cpp folds 264 arguments).
+set(CMAKE_CXX_FLAGS_INIT "--target=${_target} ${_inc} -fbracket-depth=1024")
 set(_lib "/libpath:${XWIN}/crt/lib/${XWIN_ARCH} /libpath:${XWIN}/sdk/lib/um/${XWIN_ARCH} /libpath:${XWIN}/sdk/lib/ucrt/${XWIN_ARCH}")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "${_lib}")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "${_lib}")
