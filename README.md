@@ -20,7 +20,9 @@ machines and real routers, with nobody at the controllers.
   NAT, same script. ([scenarios/simpsons-arcade/](scenarios/simpsons-arcade/README.md))
 - **Build off the workstation:** `farm/build.sh` syncs a game and the
   repos it builds against to a Linux builder (clang-cl + xwin) and returns
-  the exe to `<game>/build-farm/`. Re-runs send only changed files.
+  the exe to `<game>/build-farm/`. Re-runs send only changed files. For A/B,
+  any repo can be a git ref (`dir@ref`) or another checkout standing in
+  (`dir=name`), each variant in its own slot (`--slot b`).
   ([farm/build.sh](farm/build.sh), [builders/](builders/create-clangcl.sh))
 
 ## Getting started
