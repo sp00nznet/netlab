@@ -1,0 +1,10 @@
+# Where your projects are checked out: "<project> <path>". A project with no
+# line here is cloned on the builder from its recipe's REPO (tracked files
+# only, so a recompilation's lifted C needs a checkout).
+#
+# A dep can be pointed elsewhere too: by the name it lands as ("pcrecomp-rol"),
+# or for one project only ("catz-recomp:pcrecomp").
+encarta               ~/src/encarta
+opennote              ~/src/opennote
+pcrecomp              ~/src/pcrecomp
+catz-recomp:pcrecomp  ~/src/pcrecomp-win16

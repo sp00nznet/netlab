@@ -1,0 +1,8 @@
+# Copy to farm/builders (git-ignored). One builder per line: its ssh target and
+# its kind (builders/<kind>/). A job goes to the least loaded builder of the
+# kind its toolset needs (toolsets/<name>/builder). Make builders with
+# builders/create.sh.
+root@builder-clangcl-140 clangcl
+root@builder-clangcl-141 clangcl
+root@builder-godot-142   godot
+root@builder-node-143    node
