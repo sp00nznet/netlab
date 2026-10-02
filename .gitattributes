@@ -1,4 +1,8 @@
+# Everything LF (bash sources recipes and runs netlab; a CR breaks both),
+# except what Windows itself runs.
+* text=auto eol=lf
 *.sh  text eol=lf
 *.py  text eol=lf
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
+*.png binary
