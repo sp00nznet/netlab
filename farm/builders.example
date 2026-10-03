@@ -5,4 +5,4 @@
 root@builder-clangcl-140 clangcl
 root@builder-clangcl-141 clangcl
 root@builder-godot-142   godot
-root@builder-node-143    node
+root@builder-node-143    node,go

@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Scenarios on netlab (`scenarios/lib.sh`): roles are a project on a machine
+  with its own settings (`--as`, `--set`); `up`, `down`, `wait_log`, `press`,
+  `key`, `click`, `snap` against them. The Simpsons online match runs on it,
+  psnr included, and passed (joiner behind the NAT, through the relay).
+  `scenarios/two-player-lan.sh` is the template for other games (RA2).
+- psnr is a project: tested and built on a `go` builder, run with `netlab run
+  psnr --on <host>`. Builders can have several kinds (`node,go`).
+- Remote Windows runs allow the program through the firewall.
+- Bringing a window forward for a snapshot or a key never sends a keystroke:
+  a stray Alt put a game in menu mode, froze it, and its online opponent saw
+  "PLAYER1 IS NOT RESPONDING".
+- `run` stops the old program before copying the new build (a running binary
+  can't be overwritten, so a server update was silently skipped).
 - The loop: `netlab play` (steps files of keys, clicks, typing, menus, pad
   presses, window and log expectations, window screenshots; `drive/play.ps1`
   on Windows, `drive/play.sh` on Linux), `netlab qa` (the project's own check
@@ -33,14 +46,10 @@ All notable changes to this project are documented here. The format follows
 - `drive/snap-window.ps1`: capture one program's window, here or on a remote
   machine's desktop session.
 - A Claude skill for the farm (`.claude/skills/netlab`).
-- `drive/`: drive game instances on this machine or over SSH (start, stop,
-  press, wait for a log line, snap a frame), with a CLI.
-- `games/ps3recomp/`: launchers and notes for driving ps3recomp titles, and
-  the remote installer that sets up a box's scheduled task.
+- `games/ps3recomp/`: the runtime's driving hooks and pad masks.
 - `vm/`: build a Windows 10 test VM on Proxmox unattended, pass a GPU
   through, set it up through the guest agent, install AMD's driver.
 - `nat/`: a home-router NAT bridge on the Proxmox host, and moving the VM
   behind it and back.
-- `servers/psnr-deploy.sh`: run a psnr server on a lab host.
 - `scenarios/simpsons-arcade/`: an online match between two instances,
   verified on a LAN and with either side behind the NAT bridge.

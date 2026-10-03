@@ -36,8 +36,10 @@ ssh $VM_USER@<vm-ip> "powershell -ExecutionPolicy Bypass -File gpu-driver-amd.ps
 ssh $VM_USER@<vm-ip> "powershell -ExecutionPolicy Bypass -File prepare-game-box.ps1"
 ```
 
-Then copy a game over and set it up for driving with its runtime's
-installer, e.g. [`games/ps3recomp/install-remote.ps1`](../games/ps3recomp/README.md).
+Then describe it as a machine (`local/machines/testbox.env`: `KIND=remote`,
+`SSH`, and `JUMP` when it's behind the NAT bridge) and use it with
+`--on testbox`. `netlab run` copies each build over and starts it in the
+desktop session.
 
 ## How it's put together, and why
 

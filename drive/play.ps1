@@ -23,6 +23,12 @@ public static class NetlabPlay {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, IntPtr e);
 }
 '@
@@ -35,11 +41,30 @@ function Find-Window {
          Select-Object -First 1
     if ($p) { $p.MainWindowHandle } else { [IntPtr]::Zero }
 }
+# Bring the window to the front, with the keyboard. Windows lets only the
+# foreground thread hand the foreground on, so borrow its input queue for the
+# moment. Never by sending a keystroke: a stray Alt puts a game's window in
+# menu mode, which freezes it (and its online opponent sees it drop).
 function Focus {
     $h = Find-Window
-    if ($h -ne [IntPtr]::Zero) { [NetlabPlay]::ShowWindow($h, 9) | Out-Null; [NetlabPlay]::SetForegroundWindow($h) | Out-Null; Start-Sleep -Milliseconds 150 }
+    if ($h -ne [IntPtr]::Zero) {
+        [NetlabPlay]::ShowWindow($h, 9) | Out-Null            # SW_RESTORE
+        $fg = [NetlabPlay]::GetWindowThreadProcessId([NetlabPlay]::GetForegroundWindow(), [IntPtr]::Zero)
+        $me = [NetlabPlay]::GetCurrentThreadId()
+        $attached = $fg -ne $me -and [NetlabPlay]::AttachThreadInput($me, $fg, $true)
+        [NetlabPlay]::BringWindowToTop($h) | Out-Null
+        [NetlabPlay]::SetForegroundWindow($h) | Out-Null
+        if ($attached) { [NetlabPlay]::AttachThreadInput($me, $fg, $false) | Out-Null }
+        # Over anything that still covers it (the console that started it, a
+        # dialog), then back among the others.
+        [NetlabPlay]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 3) | Out-Null   # HWND_TOPMOST, no move/size
+        [NetlabPlay]::SetWindowPos($h, [IntPtr](-2), 0, 0, 0, 0, 3) | Out-Null   # HWND_NOTOPMOST
+        Start-Sleep -Milliseconds 200
+    }
     $h
 }
+# What's on screen over the window's rectangle, with the window in front: a
+# capture of the window alone (PrintWindow) misses its menus and pop-ups.
 function Snap([string] $name) {
     $h = Focus
     if ($h -eq [IntPtr]::Zero) { throw "snap: no window" }

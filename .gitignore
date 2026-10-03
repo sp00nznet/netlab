@@ -19,3 +19,9 @@ farm/logs/
 local/
 farm/builders
 farm/times
+
+# The agent skill is part of the repo (a global ignore of .claude/ would drop it);
+# the rest of .claude/ (local settings) stays out.
+!.claude/
+.claude/*
+!.claude/skills/
