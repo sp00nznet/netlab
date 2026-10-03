@@ -1,8 +1,9 @@
 # Driving a game from outside
 
-`drive/` steers games with no one at the controller. It presses buttons,
-waits for the game to reach a state, and looks at the screen, on this
-machine or on another box over SSH. It needs three things from the game's
+netlab steers programs with no one at the controls: `netlab play` steps and
+the scenario library ([`scenarios/`](../scenarios/README.md)) press buttons,
+wait for the program to reach a state, and look at the screen, on this
+machine or another over SSH. For a game, it needs three things from the
 runtime, and nothing game-specific.
 
 ## The three hooks
@@ -20,46 +21,23 @@ runtime, and nothing game-specific.
    person (or a script) can see what's on screen without anyone watching the
    window.
 
-A runtime that has these can be driven with `drive/lib.sh` unchanged. Give it
-a launcher that sets them up, in `games/<runtime>/`, like
-[`games/ps3recomp/`](../games/ps3recomp/README.md).
-
-## Instances
-
-An instance is one running copy of a game: `drive/inst/<name>.env`.
-
-- **`KIND=local`:** the paths are on this machine, and `START` is a shell
-  command, usually the runtime's launcher.
-- **`KIND=remote`:** a Windows box reached with `SSH` (and `JUMP`, if it
-  sits behind another host). `start` runs a scheduled task there, so the game
-  gets the logged-on desktop session rather than SSH's session 0.
-
-Scenario scripts address instances by name. The same script then works
-whether both players are on one machine, on two machines, or one of them is
-behind a NAT: only the `.env` files change.
+A runtime that has these can be driven as it is: its recipe's `RUN` line
+points the mailbox at `$PAD` (one per instance) and its log goes to the
+instance's log, which `expect-log` reads. Window screenshots (`snap`) stand in
+for frame dumps when the game draws to a window. See
+[`games/ps3recomp/`](../games/ps3recomp/README.md) for one runtime's hooks.
 
 ## Writing a scenario
 
-```sh
-NETLAB=$(cd "$(dirname "$0")/../.." && pwd)
-. "$NETLAB/drive/lib.sh"
-. "$NETLAB/games/ps3recomp/buttons.sh"
-
-start a
-wait_log a "ManagerGetStatus() -> ONLINE" 120 || { echo "a never came online"; exit 1; }
-press a $START "" 10
-...
-snap a a.png
-```
-
-Some habits that paid off:
+See [`scenarios/README.md`](../scenarios/README.md): roles (a project on a
+machine), and steps against them. Some habits that paid off:
 
 - **Retry on the log, not on time.** Menus drop presses that arrive during a
   transition. Loop "press, then wait a few seconds for the line that means it
   worked", with a retry limit.
 - **Settle after each press.** The default is 2 seconds. Longer after
   anything that loads.
-- **Clear the log before each run.** `start` does. A stale log from the last
+- **Clear the log before each run.** `up` does (each run writes a new one). A stale log from the last
   run matches every `wait_log` at once and makes a broken run look fine.
 - **Check both sides.** For online play, look at both instances' frames at
   the end. One side can play on alone after the other dropped.

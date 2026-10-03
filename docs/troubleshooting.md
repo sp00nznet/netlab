@@ -29,7 +29,7 @@ Everything here happened while building this lab.
   and `first-boot.ps1` turns updates off. `Optimize-Volume -DriveLetter C
   -ReTrim` hands freed blocks back (the disk has `discard=on`).
 - **A game started over SSH renders nothing:** it's in session 0. Start it
-  through the scheduled task (`drive/lib.sh start` does).
+  through the scheduled task (`netlab run` does, on a remote Windows machine).
 - **"Running scripts is disabled on this system":** Windows 10 ships with the
   execution policy Restricted. `first-boot.ps1` sets RemoteSigned; before
   that, run scripts with `powershell -ExecutionPolicy Bypass -File …`.

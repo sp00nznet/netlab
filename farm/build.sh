@@ -74,7 +74,7 @@ KIND=${FARM_KIND:-$(cat "$NETLAB/toolsets/$TOOLSET/builder" 2>/dev/null)}
 [ -n "$KIND" ] || { echo "$TOOLSET: no builder kind (FARM_KIND)" >&2; exit 2; }
 [ -f "$NETLAB/farm/builders" ] || { echo "no farm/builders (copy farm/builders.example)" >&2; exit 1; }
 [ -n "$BUILDER" ] || RANKED=$(grep -v '^#' "$NETLAB/farm/builders" | while read -r b k _; do
-  [ -n "$b" ] && [ "$k" = "$KIND" ] || continue
+  [ -n "$b" ] && case ",$k," in *",$KIND,"*) true ;; *) false ;; esac || continue   # a builder can have several kinds: node,go
   l=$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$b" 'echo $(cut -d" " -f1 /proc/loadavg) $(nproc)' 2>/dev/null) &&
     echo "$b $l"
 done | awk -v name="$NAME" -v times="$TIMES" '

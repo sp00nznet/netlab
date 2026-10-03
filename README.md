@@ -46,9 +46,11 @@ same way.
   checkout in place of a dependency or a submodule, and keep each variant in
   its own slot (`--slot b`) so neither build dir is thrown away.
   ([farm/build.sh](farm/build.sh))
-- **Games from outside:** pad mailboxes, frame dumps, a home-router NAT on
-  demand ([nat/](nat/)), and multi-player scenarios
-  ([docs/driving.md](docs/driving.md), [scenarios/](scenarios/simpsons-arcade/README.md)).
+- **Scenarios: several programs on several machines.** Roles (a project on
+  a machine, with its own settings) and steps against them: an online match
+  through a server (psnr, itself a project), a LAN game between two boxes,
+  with a home-router NAT on demand ([nat/](nat/)).
+  ([scenarios/](scenarios/README.md), [docs/driving.md](docs/driving.md))
 
 ## Play and QA
 
@@ -159,9 +161,10 @@ your workstation, root SSH to the Proxmox hosts, and SSH to the builders.
 | `farm/` | `build.sh` (sync, place, build, collect) and the builder list |
 | `toolsets/<name>/` | How a builder builds one kind of project |
 | `builders/<kind>/` | What a builder of that kind has (`setup.sh`); `create.sh` makes one |
-| `drive/` | The play runners (`play.ps1`, `play.sh`), and game driving (`lib.sh`, `drive.sh`) |
-| `games/<runtime>/` | How to launch and drive one runtime's games |
-| `vm/`, `nat/`, `servers/`, `scenarios/` | The test VMs, the NAT bridge, lab servers, multi-player runs |
+| `drive/` | The play runners: `play.ps1` (Windows), `play.sh` (Linux) |
+| `scenarios/` | Several programs on several machines together (`lib.sh`): online matches, LAN games, a client and its server |
+| `games/<runtime>/` | One runtime's input and log hooks (ps3recomp's pad masks) |
+| `vm/`, `nat/` | The test VMs, the NAT bridge |
 | `local.example/` | What `local/` holds; `local/` itself is git-ignored |
 | `docs/` | How driving works; what went wrong building this, and the fixes |
 

@@ -4,7 +4,7 @@
 # guest agent, since the bridge runs no DHCP. From your workstation it's then
 # reachable only through the host:
 #   ssh -J $PVE_HOST $VM_USER@$NAT_VM_IP
-# so set JUMP in its drive/inst/*.env.
+# so set JUMP in its local/machines/<name>.env.
 set -e
 NETLAB=$(cd "$(dirname "$0")/.." && pwd)
 . "$NETLAB/lab.env"

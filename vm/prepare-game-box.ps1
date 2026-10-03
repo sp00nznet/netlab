@@ -2,7 +2,7 @@
 # SSH) once, after first-boot.ps1:
 # - the Visual C++ 2015-2022 runtime (recompiled games link against it);
 # - C:\netlab, where the driving mailbox, log and frames live.
-# Games then come from games/<runtime>/install-remote.ps1.
+# Then run things on it with netlab (--on <machine>).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 

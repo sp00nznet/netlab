@@ -1,31 +1,40 @@
 # The Simpsons Arcade Game, online
 
-An online match between two driven instances of the ps3recomp build
+An online match between two copies of the ps3recomp build
 ([simpsonsarcade-ps3](https://github.com/sp00nznet/simpsonsarcade-ps3)) over
-a [psnr](https://github.com/sp00nznet/psnr) server:
+a [psnr](https://github.com/sp00nznet/psnr) server, all three started by the
+scenario ([`../lib.sh`](../lib.sh)):
 
 ```sh
-scenarios/simpsons-arcade/match.sh a b captures/
+scenarios/simpsons-arcade/match.sh <host machine> <joiner machine> <server machine>
+scenarios/simpsons-arcade/match.sh local testbox labserver
 ```
 
-`a` hosts, `b` joins. What the run tests depends only on the instances'
-`drive/inst/*.env`:
+The host creates a match, the joiner quick-matches in, both pick a
+character, the host starts, and both windows are captured in Stage 1. The
+server is psnr's recipe run on the server machine (`PSNR_FLAGS=-relay` in
+its machine file when a player is behind a NAT). Each machine says where its
+copy of the game's data is (`SIMPSONS_DIR`). Which network test it is depends
+only on the machines:
 
-| Test | `a` (host) | `b` (joiner) | psnr |
+| Test | host | joiner | server |
 |---|---|---|---|
-| One machine | local, `P2P_PORT=3658` | local, `P2P_PORT=3659`, its own `DIR` | local |
-| Two machines on a LAN | local | remote: the test VM on the LAN | either machine |
-| Host behind a NAT | remote: the VM behind the NAT bridge (`JUMP` set) | local | a third LAN host |
-| Joiner behind a NAT | local | remote: the VM behind the NAT bridge | a third LAN host, with `-relay` |
+| Two machines on a LAN | this one | the test VM on the LAN | any LAN host |
+| Host behind a NAT | the VM behind the NAT bridge (`JUMP` in its machine file) | this one | a LAN host |
+| Joiner behind a NAT | this one | the VM behind the NAT bridge | a LAN host, with `-relay` |
 
 - **"Joiner behind a NAT" needs the relay.** The host opens the game-setup
   stream to the joiner, and nothing can connect in to a player behind a
   router.
 - **"Host behind a NAT" doesn't.** The host connects out.
-- **Players are named by `PLAYER`**, and names must differ: psnr refuses a
-  second player with a name already taken.
+- **Players are named by `PLAYER`**, set per role in `match.sh`; psnr refuses
+  a second player with a name already taken.
 
 ## Verified
+
+As of 2026-10-02, on the scenario library with farm builds: **joiner behind
+a NAT**. This PC hosted, the test VM joined through the relay, and both
+reached Stage 1 with both players in the HUD.
 
 As of 2026-09-30, with ps3recomp#200 and psnr's relay:
 

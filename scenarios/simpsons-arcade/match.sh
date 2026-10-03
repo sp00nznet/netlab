@@ -1,33 +1,42 @@
-#!/bin/sh
-# match.sh <host-inst> <joiner-inst> [out-dir]
-# An online match of The Simpsons Arcade Game between two driven instances:
+#!/bin/bash
+# match.sh <host machine> <joiner machine> <server machine> [out-dir]
+# An online match of The Simpsons Arcade Game: psnr on the server machine,
 # the host creates a match, the joiner quick-matches in, both pick a
-# character, the host starts, and after a while both screens are captured.
-# Which machines, networks and psnr server that means is all in the
-# instances' drive/inst/*.env; see README.md here.
+# character, the host starts, and after a while both windows are captured.
+# Machines are local/machines/<name>.env ("local" is this one); which network
+# test that makes is in README.md here.
+#
+#   scenarios/simpsons-arcade/match.sh local testbox labserver captures/
 NETLAB=$(cd "$(dirname "$0")/../.." && pwd)
-. "$NETLAB/drive/lib.sh"
+. "$NETLAB/scenarios/lib.sh"
 . "$NETLAB/games/ps3recomp/buttons.sh"
 . "$NETLAB/scenarios/simpsons-arcade/menu.sh"
 
-host=$1 joiner=$2 out=${3:-.}
-[ -n "$host" ] && [ -n "$joiner" ] || { sed -n '2,7p' "$0"; exit 2; }
+[ -n "$3" ] || { sed -n '2,9p' "$0"; exit 2; }
+SCEN_OUT=${4:-$NETLAB/local/scenarios/simpsons-$(date +%Y%m%d-%H%M%S)}
+psnr=$(addr "$3") || exit 1
 
-start "$host"
-online_menu "$host" || { echo "$host never reached Online Game"; exit 1; }
-create_match "$host" || { echo "$host didn't create a match"; exit 1; }
-echo "$host created the match"
+role server psnr               "$3"
+role host   simpsonsarcade-ps3 "$1" PLAYER=player1 PSNR=$psnr P2P_PORT=3658
+role joiner simpsonsarcade-ps3 "$2" PLAYER=player2 PSNR=$psnr P2P_PORT=3659
+trap 'down host; down joiner' EXIT
 
-start "$joiner"
-online_menu "$joiner" || { echo "$joiner never reached Online Game"; exit 1; }
-quick_match "$joiner" || { echo "$joiner didn't join"; exit 1; }
-echo "$joiner joined"
+up server
+up host
+online_menu host || { echo "the host never reached Online Game"; exit 1; }
+create_match host || { echo "the host didn't create a match"; exit 1; }
+echo "the host created the match"
+
+up joiner
+online_menu joiner || { echo "the joiner never reached Online Game"; exit 1; }
+quick_match joiner || { echo "the joiner didn't join"; exit 1; }
+echo "the joiner joined"
 
 sleep 15
-press "$host" $CROSS "" 4; press "$joiner" $CROSS "" 6     # both pick their character
-press "$host" $CROSS "" 30                                 # the host starts the game
+press host $CROSS "" 4; press joiner $CROSS "" 6     # both pick their character
+press host $CROSS "" 30                              # the host starts the game
 echo "started"
 
 sleep 30
-snap "$host" "$out/$host.png" && snap "$joiner" "$out/$joiner.png" &&
-    echo "frames: $out/$host.png $out/$joiner.png -- in a working match both show Stage 1 with both players"
+snap host stage.png && snap joiner stage.png &&
+    echo "in a working match both show Stage 1 with both players: $SCEN_OUT/{host,joiner}/stage.png"

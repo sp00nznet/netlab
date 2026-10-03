@@ -3,7 +3,7 @@
 This lab drives your hypervisor as root and your test box as an
 administrator, over SSH keys. Keep it on your own network.
 
-- **No secrets or hosts live in the repo.** `lab.env`, `drive/inst/*.env`,
+- **No secrets or hosts live in the repo.** `lab.env`,
   `local/` (checkouts, machines, private recipes), `farm/builders` and
   `farm/times` hold your hosts, paths and addresses and are git-ignored. The
   SSH key is yours, from `~/.ssh`. Don't put passwords in any of them.
