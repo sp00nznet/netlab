@@ -52,6 +52,27 @@ same way.
   with a home-router NAT on demand ([nat/](nat/)).
   ([scenarios/](scenarios/README.md), [docs/driving.md](docs/driving.md))
 
+## Status
+
+What has run end to end on the farm, as of 2026-10-03. Builds are from
+Linux builders; "ran" means on a Windows or Linux test machine.
+
+| Project | Kind | Built | Ran / QA |
+|---|---|---|---|
+| Encarta 97 | recompilation, x86 | yes | boots to an article (needs encarta#3, `-Harness`) |
+| Simpsons Arcade (PS3) | recompilation, x64 | yes | online match passes: host + joiner behind a NAT, through psnr's relay |
+| OpenNote | Win32 app | yes | QA passes: its `--selftest` and a File-menu walk |
+| connectty | Electron | AppImage + deb | QA passes on the Linux VM |
+| psnr | Go server | yes, after its tests | runs on a Linux lab host for the scenarios |
+| Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, androidrecomp, Virtual Springfield, Catz | recompilations | yes | not yet |
+
+Fixes the farm needed are upstream or open: xboxrecomp#165, pcrecomp#40,
+encarta#3, and a local Catz branch.
+
+Next: RA2 vs RA2 over the LAN ([`scenarios/two-player-lan.sh`](scenarios/two-player-lan.sh)),
+a Unity builder (needs a licence), checks on the builder right after the
+build, and QA for the recompilations that have no gate yet ([docs/qa.md](docs/qa.md)).
+
 ## Play and QA
 
 A steps file is one step per line, the same on Windows (`drive/play.ps1`)
