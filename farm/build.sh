@@ -172,7 +172,11 @@ sync_spec() {
   # A file, not a pipe: a long tar|ssh pipe from Windows has dropped mid-stream.
   scp -q "$tmp" "$BUILDER:$r.tar"
   rm -f "$tmp"
-  ssh "$BUILDER" "mkdir -p $W && $clean tar --no-same-owner -xf $r.tar -C $W && rm $r.tar"
+  # -m: stamp what arrives with the builder's clock, not this machine's. Builders
+  # run ahead of Windows hosts (40 s seen), so a file edited inside that window
+  # would land older than its object and ninja would keep the stale one. Only
+  # changed files are sent, so marking them new is exactly right.
+  ssh "$BUILDER" "mkdir -p $W && $clean tar --no-same-owner -m -xf $r.tar -C $W && rm $r.tar"
   [ -n "$clean" ] || echo "$now" > "$st"
 }
 sync_spec "$GAME"
