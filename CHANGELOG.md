@@ -53,3 +53,10 @@ All notable changes to this project are documented here. The format follows
   behind it and back.
 - `scenarios/simpsons-arcade/`: an online match between two instances,
   verified on a LAN and with either side behind the NAT bridge.
+
+### Fixed
+- Incremental syncs could build stale code: tar restored each file's Windows mtime,
+  and the builders run ahead of the host (40 s measured), so a file edited inside that
+  window landed older than its object and ninja skipped it. Synced files now take the
+  builder's clock (`tar -m`). Found on bw, where a struct change rebuilt one includer
+  and not the others.
