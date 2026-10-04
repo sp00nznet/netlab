@@ -22,7 +22,7 @@ users=$(grep -lE "/dev/dri|/dev/kfd" /etc/pve/lxc/*.conf 2>/dev/null | xargs -r 
 case $MODE in
 --apply)
   cat > $CONF <<CONF
-# recomp-netlab: the passthrough GPU belongs to vfio-pci from boot.
+# netlab: the passthrough GPU belongs to vfio-pci from boot.
 # Remove this file, run update-initramfs -u -k all, and reboot to undo.
 options vfio-pci ids=$IDS disable_vga=1
 softdep amdgpu pre: vfio-pci

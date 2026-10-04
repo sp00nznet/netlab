@@ -4,7 +4,7 @@
 # are synced to the builder's workspace; after the first sync only files
 # changed since the last one go over, so the builder's ninja dir stays warm.
 # The exes, pdbs and maps come back to <game-dir>/build-farm[-<slot>]/, and go
-# to the share (/share/drops/<game>/<job>/) when the builder has the share.
+# to the share (/share/drops/<game>/<job>/) when the builder has one.
 #
 # usage: farm/build.sh [--full] [--slot <name>] <toolset> <game> [dep...] [-- cmake-args...]
 #   farm/build.sh cmake     ~/src/forcecommander ~/src/pcrecomp=tools -- -DFOCOM_TRACE=ON
@@ -200,7 +200,7 @@ cd "$W"
 if [ -d /share ]; then
   mkdir -p "/share/drops/$GAME/$JOB"
   xargs -r -a ".artifacts-$JOB" cp -t "/share/drops/$GAME/$JOB/"
-  echo "drop: tank/scratch/work/drops/$GAME/$JOB"
+  echo "drop: /share/drops/$GAME/$JOB"
 fi
 EOF
 } | ssh "$BUILDER" "mkdir -p $W && cd $W && LC_ALL=C bash -s" 2>&1 | tee "$LOG"

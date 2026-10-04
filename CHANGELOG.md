@@ -5,7 +5,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Renamed to netlab: it builds and tests every kind of project, not just
+  recompilations. The README says who it's for and shows how the pieces fit
+  (diagrams of the lab, build placement, machines, scenarios).
+- `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
+
 ### Added
+- Guides: `docs/getting-started.md` (a Proxmox host and an agent to a first
+  build and QA run), `docs/projects.md`, `docs/builders.md`,
+  `docs/machines.md`, `docs/agents.md`.
 - `projects/bw.env`: Black & White, a CMake build under `src/` (script toolset on a
   clangcl builder), retail data dirs excluded, QA through its own `tools/run_tests.cmd`.
 - Scenarios on netlab (`scenarios/lib.sh`): roles are a project on a machine
