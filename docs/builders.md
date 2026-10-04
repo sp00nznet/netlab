@@ -30,6 +30,7 @@ toolset's `build.sh`, and copies the results back.
 | `clangcl` | clang-cl, lld-link, CMake, Ninja, the MSVC CRT and Windows SDK for x86 and x64 (xwin), `/opt/clangcl.cmake` | toolsets `cmake`, `ps3recomp`; `script` recipes that run CMake themselves |
 | `node` | Node 20, electron-builder's Linux needs (fuse, dpkg, rpm) | `script` with `BUILDS_ON=node` |
 | `go` | Go | `script` with `BUILDS_ON=go` |
+| `mingw` | mingw-w64 GCC (x86_64, posix threads), SDL2's mingw build, `mingw-pkg-config` (pkg-config that sees only SDL2) | `script` with `BUILDS_ON=mingw`: GNU Makefile projects cross-built for Windows. Small, so it shares a container with `clangcl` (`clangcl,mingw`) |
 | `godot` | headless Godot editors and export templates, `godot-<major.minor>` | `script` with `BUILDS_ON=godot` |
 
 Running the clangcl setup accepts Microsoft's CRT/SDK licence through xwin.
