@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `projects/bw.env`: Black & White, a CMake build under `src/` (script toolset on a
+  clangcl builder), retail data dirs excluded, QA through its own `tools/run_tests.cmd`.
 - Scenarios on netlab (`scenarios/lib.sh`): roles are a project on a machine
   with its own settings (`--as`, `--set`); `up`, `down`, `wait_log`, `press`,
   `key`, `click`, `snap` against them. The Simpsons online match runs on it,
