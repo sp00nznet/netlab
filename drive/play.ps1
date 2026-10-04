@@ -30,6 +30,9 @@ public static class NetlabPlay {
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, IntPtr e);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint f, IntPtr e);
+    [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+    [DllImport("user32.dll")] public static extern short VkKeyScan(char c);
 }
 '@
 [NetlabPlay]::SetProcessDPIAware() | Out-Null
@@ -75,26 +78,26 @@ function Snap([string] $name) {
     $b.Save((Join-Path $Out $name), [System.Drawing.Imaging.ImageFormat]::Png)
     "snap $name"
 }
-# A step's key combo (ctrl+n, alt+f4, enter, down) in SendKeys' notation.
-function SendKeys-Combo([string] $combo) {
-    $named = @{ enter='{ENTER}'; esc='{ESC}'; tab='{TAB}'; space=' '; backspace='{BACKSPACE}'; del='{DELETE}'
-                up='{UP}'; down='{DOWN}'; left='{LEFT}'; right='{RIGHT}'; home='{HOME}'; end='{END}'
-                pgup='{PGUP}'; pgdn='{PGDN}' }
-    $mods = ''; $key = ''
-    foreach ($part in $combo.ToLower().Split('+')) {
-        switch -regex ($part) {
-            '^(ctrl|control)$' { $mods += '^'; break }
-            '^alt$'            { $mods += '%'; break }
-            '^shift$'          { $mods += '+'; break }
-            '^f([0-9]+)$'      { $key = "{F$($Matches[1])}"; break }
-            default {
-                if ($named.ContainsKey($part)) { $key = $named[$part] }
-                elseif ('+^%~(){}[]'.Contains($part)) { $key = "{$part}" }
-                else { $key = $part }
-            }
-        }
+# A step's key combo (ctrl+n, alt+f4, enter, down, w): pressed and released
+# as real key events, scan codes included. SendKeys sends none, and games
+# that read scan codes (SDL, DirectInput) never see its keys.
+function Send-Combo([string] $combo) {
+    $named = @{ enter=0x0D; esc=0x1B; tab=0x09; space=0x20; backspace=0x08; del=0x2E
+                up=0x26; down=0x28; left=0x25; right=0x27; home=0x24; end=0x23; pgup=0x21; pgdn=0x22
+                ctrl=0x11; control=0x11; alt=0x12; shift=0x10 }
+    $extended = 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2E
+    $vks = foreach ($part in $combo.ToLower().Split('+')) {
+        if ($named.ContainsKey($part)) { $named[$part] }
+        elseif ($part -match '^f([0-9]+)$') { 0x6F + [int]$Matches[1] }
+        else { [NetlabPlay]::VkKeyScan($part[0]) -band 0xFF }
     }
-    $mods + $key
+    $ev = { param($vk, $up)
+        $f = $(if ($vk -in $extended) { 1 } else { 0 }) -bor $(if ($up) { 2 } else { 0 })
+        [NetlabPlay]::keybd_event([byte]$vk, [byte][NetlabPlay]::MapVirtualKey($vk, 0), $f, [IntPtr]::Zero) }
+    foreach ($vk in $vks) { & $ev $vk $false }
+    Start-Sleep -Milliseconds 60
+    [array]::Reverse($vks)
+    foreach ($vk in $vks) { & $ev $vk $true }
 }
 function Fail([string] $why) {
     "FAIL line ${n}: $why"
@@ -111,7 +114,7 @@ foreach ($raw in Get-Content $Steps) {
     $cmd = $w[0]; $a = @($w | Select-Object -Skip 1)
     switch ($cmd) {
         'wait'  { Start-Sleep -Milliseconds ([double]$a[0] * 1000) }
-        'key'   { Focus | Out-Null; [System.Windows.Forms.SendKeys]::SendWait((SendKeys-Combo $a[0])) }
+        'key'   { Focus | Out-Null; Send-Combo $a[0] }
         'type'  { Focus | Out-Null; $t = ($a -join ' ') -replace '([+^%~(){}\[\]])', '{$1}'; [System.Windows.Forms.SendKeys]::SendWait($t) }
         'click' {
             $h = Focus; if ($h -eq [IntPtr]::Zero) { Fail 'click: no window' }
