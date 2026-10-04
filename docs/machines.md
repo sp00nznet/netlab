@@ -33,7 +33,7 @@ gets each machine's own value. A scenario role can override any of them
 | Machine | Set up with | Good for |
 |---|---|---|
 | This workstation | nothing; `local/machines/local.env` for its variables | the fastest look at a build; your own GPU. Careful: someone uses it, so no typing into real data |
-| A Windows VM with a passed-through GPU | [vm/README.md](../vm/README.md): an unattended install, SSH, the GPU and its driver, autologon | games and anything that needs a real GPU; a second player; anything you don't want touching your desktop |
+| A Windows VM, optionally with a passed-through GPU | `vm/setup-windows.sh`: asks a few questions, installs Windows unattended, sets up SSH and the machine file ([vm/README.md](../vm/README.md)) | games and anything that needs a real GPU; a second player; anything you don't want touching your desktop |
 | A Linux VM with a desktop | `vm/create-linux-vm.sh` (Debian 13, Xfce logged on by itself, xdotool, ImageMagick) | Linux builds with a window: AppImages, Godot Linux exports. Software rendering, no GPU |
 | A Linux host without a desktop | an SSH account | servers a scenario needs (`netlab run psnr --on labserver`) |
 | Any other Windows PC | OpenSSH server, a key, an account that's logged on, `vm/prepare-game-box.ps1` | real hardware |
@@ -49,7 +49,7 @@ a scheduled task for the logged-on user and starts that. The box needs:
 - **OpenSSH server** with your key, and PowerShell as its shell;
 - the program let through the firewall (netlab does this per run).
 
-For the VM, the answer file sets up autologon, `vm/first-boot.ps1` sets up
+`vm/setup-windows.sh` does all of this for the VM: the answer file sets up autologon, `vm/first-boot.ps1` sets up
 SSH, and `vm/prepare-game-box.ps1` installs the VC++ runtime and `C:\netlab`.
 The two scripts work on a physical PC too; set autologon there yourself
 (Sysinternals Autologon, or the registry).

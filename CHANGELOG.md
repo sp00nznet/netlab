@@ -19,6 +19,13 @@ All notable changes to this project are documented here. The format follows
   for Windows, for GNU Makefile projects (`make CC=x86_64-w64-mingw32-gcc
   PKG_CONFIG=mingw-pkg-config`). Runs alongside clangcl in the same
   containers, listed as `clangcl,mingw`.
+- `vm/setup-windows.sh`: the Windows test VM in one script. It asks for the
+  host, the ISO and an account name, brings its own answer file
+  (`vm/autounattend.xml`) with a random password, uploads the ISO or fetches
+  virtio-win (asking first), installs, sets up SSH and the VC++ runtime,
+  writes the machine file, and optionally passes a GPU through. Windows 11
+  works too (a virtual TPM). `vm/build-setup-iso.sh` and `vm/mkunattend.py`
+  are gone: no more bringing your own answer file.
 - Guides: `docs/getting-started.md` (a Proxmox host and an agent to a first
   build and QA run), `docs/projects.md`, `docs/builders.md`,
   `docs/machines.md`, `docs/agents.md`.

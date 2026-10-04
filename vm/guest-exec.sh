@@ -17,5 +17,5 @@ body = open(path, encoding='utf-8').read()
 print(base64.b64encode((head + body).encode('utf-16-le')).decode())
 EOF
 )
-ssh "$PVE_HOST" "qm guest exec $VMID --timeout 1800 -- powershell -NoProfile -EncodedCommand $enc" |
+ssh -n "$PVE_HOST" "qm guest exec $VMID --timeout 1800 -- powershell -NoProfile -EncodedCommand $enc" |
   python -c "import json,sys; d=json.load(sys.stdin); sys.stdout.write(d.get('out-data','')); sys.stderr.write(d.get('err-data','') if d.get('exitcode') else ''); sys.exit(d.get('exitcode') or 0)"

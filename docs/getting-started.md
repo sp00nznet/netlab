@@ -182,7 +182,7 @@ In whatever order you need:
 - **More builders**, of the same kind on another node, or new kinds. Jobs
   spread on their own; `./netlab bench <project>` measures each builder.
   [builders.md](builders.md)
-- **Test machines**: a Windows VM with a real GPU, a Linux VM with a desktop,
+- **Test machines**: a Windows VM (`vm/setup-windows.sh`, one script), a Linux VM with a desktop,
   or any machine you can SSH into. Then `--on <machine>` on run, snap, qa.
   [machines.md](machines.md)
 - **The agent**: let it drive the loop. [agents.md](agents.md)
