@@ -61,6 +61,7 @@ Linux builders; "ran" means on a Windows or Linux test machine.
 |---|---|---|---|
 | Encarta 97 | recompilation, x86 | yes | boots to an article (needs encarta#3, `-Harness`) |
 | Simpsons Arcade (PS3) | recompilation, x64 | yes | online match passes: host + joiner behind a NAT, through psnr's relay |
+| Red Alert 2 / Yuri's Revenge | recompilation, x86 (native32) | yes, 4.5 min cold | LAN match passes: this PC hosts, the test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)); its playtest suite runs on the farm build (needs pcrecomp#47) |
 | OpenNote | Win32 app | yes | QA passes: its `--selftest` and a File-menu walk |
 | connectty | Electron | AppImage + deb | QA passes on the Linux VM |
 | psnr | Go server | yes, after its tests | runs on a Linux lab host for the scenarios |
@@ -68,10 +69,9 @@ Linux builders; "ran" means on a Windows or Linux test machine.
 | Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, androidrecomp, Virtual Springfield, Catz | recompilations | yes | not yet |
 
 Fixes the farm needed are upstream or open: xboxrecomp#165, pcrecomp#40,
-encarta#3, and a local Catz branch.
+pcrecomp#47, encarta#3, and a local Catz branch.
 
-Next: RA2 vs RA2 over the LAN ([`scenarios/two-player-lan.sh`](scenarios/two-player-lan.sh)),
-a Unity builder (needs a licence), checks on the builder right after the
+Next: RA2 across the NAT and to a match's end, a Unity builder (needs a licence), checks on the builder right after the
 build, and QA for the recompilations that have no gate yet ([docs/qa.md](docs/qa.md)).
 
 ## Play and QA

@@ -8,7 +8,8 @@ and the script can decide what to do next from what it sees.
 | Scenario | What it proves |
 |---|---|
 | [`simpsons-arcade/`](simpsons-arcade/README.md) | an online match through a psnr server, on a LAN or with either side behind a NAT |
-| [`two-player-lan.sh`](two-player-lan.sh) | the starting point for any two-player LAN test (RA2 vs RA2) |
+| [`redalert2/lan.sh`](redalert2/lan.sh) | Red Alert 2 against itself over the LAN: lobby, join, accept, start, both in the game; pictures from the game's own frames |
+| [`two-player-lan.sh`](two-player-lan.sh) | the starting point for any two-player LAN test |
 
 ## Roles
 
@@ -64,9 +65,15 @@ retry on the log line that shows it worked, then back out and try again. See
 
 ## RA2 vs RA2 over the LAN
 
-The same shape as the Simpsons match without the server role: both copies on
-one LAN (this machine and the test VM moved onto the LAN with
-`nat/vm-to-lan.sh`, or two VMs). One hosts a skirmish from the network menu,
-the other joins it. Then both screens are captured in the game.
-`two-player-lan.sh` has that skeleton; what's left once RA2 is ready is its
-recipe and the clicks for its menus.
+[`redalert2/lan.sh`](redalert2/lan.sh): this machine hosts, the test VM joins
+(`scenarios/redalert2/lan.sh local testbox`). Both on one LAN, since the
+game's IPX emulation finds games by broadcast: `nat/vm-to-lan.sh` first,
+with the VM's machine file at its LAN address, and `nat/vm-to-nat.sh` after.
+The VM needs the game in `RA2_GAME` and a player name of its own.
+
+Each side plays a script in the game's own input (redalert2-recomp's
+`tools/lan/host.args`, `joiner.args`: menu presses by dialog and control ID),
+given through the role setting `RA2_ARGS`. The pictures are the game's own
+frames, fetched from each side, not screen captures: a capture of the window
+picks up whatever covers it. redalert2-recomp's `docs/netlab.md` has the
+details.
