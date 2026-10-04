@@ -9,6 +9,7 @@ and the script can decide what to do next from what it sees.
 |---|---|
 | [`simpsons-arcade/`](simpsons-arcade/README.md) | an online match through a psnr server, on a LAN or with either side behind a NAT |
 | [`redalert2/lan.sh`](redalert2/lan.sh) | Red Alert 2 against itself over the LAN: lobby, join, accept, start, both in the game; pictures from the game's own frames |
+| [`lostworld/lan.sh`](lostworld/lan.sh) | The Lost World (Sega Model 3) in lockstep netplay: this PC hosts, a lab VM joins, both play a script; passes when the two machines' RAM hashes agree line for line |
 | [`two-player-lan.sh`](two-player-lan.sh) | the starting point for any two-player LAN test |
 
 ## Roles
