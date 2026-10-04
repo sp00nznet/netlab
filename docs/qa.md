@@ -43,6 +43,7 @@ the state, `expect-window`, and `snap`. Their own flags do the driving, in
 | Force Commander | `--click X Y`, `--key VK`, `--clickat`, `--clickgap`; `--nocond`, `--varat` | `--watchdog s` | `--dumpframe`, `--screenshot` |
 | Rise of Legends | `--click x,y@sec`, `--key vk@sec` (video time) | `--watchdog s`, `--frames N` | `--record out.mp4` |
 | androidrecomp | JNI calls at a frame: `--entry=...pointerPressed --args=x,y,0 --entry-at=frame:N` | `--frames N` | `--shot` |
+| Goalblins (Godot) | `res://tools/shoot.tscn -- <scene> <out.png>` | frames | PNGs |
 | ordinary windowed apps | `key`, `click`, `type` steps | `expect-window`, `expect-log` | `snap` |
 
 ## Where each can run
@@ -55,7 +56,7 @@ the state, `expect-window`, and `snap`. Their own flags do the driving, in
   game drivers above. They run on a machine that has the data, named in its
   `local/machines/<name>.env`.
 - **Needs a GPU or a display:** ps3recomp `--shots`, Rise of Legends
-  recording, Force Commander (DirectDraw).
+  recording, Force Commander (DirectDraw), Goalblins captures.
 
 ## Still to do
 
