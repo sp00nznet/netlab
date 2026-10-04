@@ -6,12 +6,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- `play.ps1` sends `key` steps as real key events with scan codes
+  (`keybd_event` + `MapVirtualKey`) instead of `SendKeys`, which sends none:
+  SDL and DirectInput games read the scan code and never saw the keys.
 - Renamed to netlab: it builds and tests every kind of project, not just
   recompilations. The README says who it's for and shows how the pieces fit
   (diagrams of the lab, build placement, machines, scenarios).
 - `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
 
 ### Added
+- A `mingw` builder kind (`builders/mingw/setup.sh`): mingw-w64 GCC and SDL2
+  for Windows, for GNU Makefile projects (`make CC=x86_64-w64-mingw32-gcc
+  PKG_CONFIG=mingw-pkg-config`). Runs alongside clangcl in the same
+  containers, listed as `clangcl,mingw`.
 - Guides: `docs/getting-started.md` (a Proxmox host and an agent to a first
   build and QA run), `docs/projects.md`, `docs/builders.md`,
   `docs/machines.md`, `docs/agents.md`.
