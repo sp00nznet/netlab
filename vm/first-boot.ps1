@@ -5,6 +5,7 @@
 #   otherwise don't apply);
 # - no hibernation file and no automatic Windows Update, so the thin disk
 #   doesn't quietly grow by several GB;
+# - Setup's copies of the answer file deleted (they hold the password);
 # - scripts allowed (RemoteSigned): Windows 10 refuses to run any by default,
 #   including the ones the lab copies over.
 $ErrorActionPreference = 'Stop'
@@ -27,6 +28,9 @@ if (Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -EA 0) {
         -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -Profile Any | Out-Null
 }
 Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private
+
+# Setup keeps copies of the answer file, password and all.
+Remove-Item -Force -EA 0 C:\Windows\Panther\unattend.xml, C:\Windows\Panther\autounattend.xml, C:\Windows\System32\Sysprep\unattend.xml
 
 Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -Force
 powercfg /h off

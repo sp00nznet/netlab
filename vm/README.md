@@ -1,45 +1,71 @@
 # The Windows test box
 
-A Windows 10 VM on Proxmox with a real GPU passed through: a second machine
-to play against, that recompiled games render on at full speed. Everything
-runs from your workstation, with `lab.env` filled in and root SSH to the
-Proxmox host.
-
-## What you need on the Proxmox host
-
-- **IOMMU on:** `amd_iommu=on iommu=pt` (or `intel_iommu=on`) on the kernel
-  command line, and the vfio modules in `/etc/modules`.
-- **A GPU it can give away:** it can't be the one the host itself displays
-  on; `video=efifb:off` helps.
-- **In `ISO_DIR`:**
-  - a Windows 10/11 ISO. Not Server: AMD's consumer driver won't install on
-    Server;
-  - the virtio-win ISO;
-  - an image with an `autounattend.xml` at its root that creates a local
-    admin account (`VM_USER`), logs it on automatically, and installs the
-    virtio guest tools and QEMU guest agent from the virtio CD at first logon.
-    `mkunattend.py` describes the layout it expects.
-- **About 60 GB free** on `VM_STORAGE`. It's thin, so the VM only takes
-  what it writes: about 26 GB with the driver installed. Watch a thin pool
-  above 90%; a full one damages every VM on it.
-
-## Build it
+A Windows 10 or 11 VM on Proxmox that logs itself on, reachable over SSH,
+optionally with a real GPU passed through: a second machine to run and play
+things on. One script makes it, from your workstation:
 
 ```sh
-vm/vfio-host.sh --apply && ssh $PVE_HOST reboot   # once per host; see the script first
-vm/build-setup-iso.sh                             # virtio drivers + your answer file, one CD
-vm/create-vm.sh                                   # unattended install; waits for the guest agent
-vm/guest-exec.sh vm/first-boot.ps1 PubKey="$(cat ~/.ssh/id_rsa.pub)"   # SSH, Private network, no WU
-vm/attach-gpu.sh                                  # the GPU goes on after the install
-scp vm/gpu-driver-amd.ps1 vm/prepare-game-box.ps1 $VM_USER@<vm-ip>:C:/Users/$VM_USER/
-ssh $VM_USER@<vm-ip> "powershell -ExecutionPolicy Bypass -File gpu-driver-amd.ps1 -Url <AMD driver URL>"
-ssh $VM_USER@<vm-ip> "powershell -ExecutionPolicy Bypass -File prepare-game-box.ps1"
+vm/setup-windows.sh
 ```
 
-Then describe it as a machine (`local/machines/testbox.env`: `KIND=remote`,
-`SSH`, and `JUMP` when it's behind the NAT bridge) and use it with
-`--on testbox`. `netlab run` copies each build over and starts it in the
-desktop session.
+```
+  asks: Proxmox host + SSH user, VM ID, storage, size, Windows ISO, account name
+    │
+    ├─ your key onto the host, if it isn't there (asks for the password once)
+    ├─ the Windows ISO uploaded, if it's a file on this PC
+    ├─ virtio-win: the one on the host, or downloaded there (asks first)
+    ├─ vm/autounattend.xml + a random password ──> a small answer CD
+    ├─ vm/create-vm.sh: the unattended install, 15-45 min
+    ├─ the answer CD ejected and deleted (it holds the password)
+    ├─ through the guest agent: SSH with your key, VC++ runtime, C:\netlab
+    ├─ local/machines/<name>.env, so --on <name> works
+    └─ optionally: a GPU passed through, and AMD's driver
+  prints: the address, the account and its password (kept in local/secrets/)
+```
+
+Every answer goes into `lab.env` and is the default next time. Then:
+
+```sh
+./netlab run opennote --on testbox
+```
+
+## What you need
+
+- **A Windows 10 or 11 ISO**, desktop edition, on the host or on your PC.
+  Not Server: AMD's consumer GPU driver won't install on it. The answer file
+  installs Pro (with Microsoft's generic install key, which doesn't
+  activate); an ISO without Pro stops at the edition screen.
+- **Root SSH to the Proxmox host** (the script offers to put your key there).
+- **About 60 GB free** on the VM's storage. Thin storage only takes what
+  Windows writes: about 26 GB with a GPU driver. Watch a thin pool above 90%:
+  a full one damages every VM on it.
+- **For a GPU:** IOMMU on (`amd_iommu=on iommu=pt` or `intel_iommu=on` on the
+  kernel command line), and a card the host doesn't display on. Give it to
+  vfio-pci first, which needs a host reboot:
+
+  ```sh
+  vm/vfio-host.sh            # shows what it would change
+  vm/vfio-host.sh --apply && ssh $PVE_HOST reboot
+  ```
+
+  The setup script tells you if this is still to do, and `vm/attach-gpu.sh`
+  attaches the card afterwards.
+
+## The pieces, if you'd rather run them yourself
+
+| Script | Does |
+|---|---|
+| `vm/autounattend.xml` | the answer file; `@USER@`, `@PASSWORD@`, `@NAME@` are filled in |
+| `vm/create-vm.sh` | creates the VM from `lab.env` and waits out the install |
+| `vm/guest-exec.sh <script.ps1> [K=V...]` | runs a PowerShell script in the VM as SYSTEM, through the guest agent |
+| `vm/first-boot.ps1` | OpenSSH with your key, the network Private, no Windows Update or hibernation |
+| `vm/prepare-game-box.ps1` | the VC++ runtime and `C:\netlab` |
+| `vm/attach-gpu.sh` | the GPU on, the install CDs off |
+| `vm/gpu-driver-amd.ps1` | AMD's display driver from the Adrenalin package, without AMD's installer |
+
+The machine file it writes (`local/machines/<name>.env`): `KIND=remote`,
+`SSH=<account>@<address>`, `DIR=C:/netlab`. Add `JUMP=root@<proxmox host>`
+when the VM moves behind the NAT bridge (`nat/vm-to-nat.sh`).
 
 ## How it's put together, and why
 

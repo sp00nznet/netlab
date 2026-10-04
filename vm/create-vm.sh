@@ -1,9 +1,10 @@
 #!/bin/sh
 # Create the Windows test VM and let the unattended install run: q35, UEFI,
-# a thin SATA disk (it needs no driver during setup), virtio network, the
-# Windows ISO and the setup ISO (vm/build-setup-iso.sh) as CDs, and the
-# guest agent enabled. Returns when the agent answers, i.e. Windows finished
-# installing and ran its first-logon commands (15-45 minutes).
+# a virtual TPM (Windows 11), a thin SATA disk (it needs no driver during
+# setup), virtio network, three CDs (Windows, virtio-win, and the answer file
+# vm/setup-windows.sh made), and the guest agent enabled. Returns when the
+# agent answers, i.e. Windows finished installing and ran its first-logon
+# commands (15-45 minutes). vm/setup-windows.sh runs it for you.
 #
 # The GPU is attached afterwards (vm/attach-gpu.sh): an install with it
 # passed through gains nothing and can hang on the card.
@@ -16,13 +17,15 @@ set -e
 if qm status $VMID >/dev/null 2>&1 || pvesh get /cluster/resources --type vm --output-format json | grep -q '"vmid":$VMID,'; then
   echo "VMID $VMID is taken"; exit 1
 fi
-qm create $VMID --name $VM_NAME --ostype win10 --machine q35 --bios ovmf \
+qm create $VMID --name $VM_NAME --ostype win11 --machine q35 --bios ovmf \
   --efidisk0 $VM_STORAGE:1,efitype=4m,pre-enrolled-keys=1 \
+  --tpmstate0 $VM_STORAGE:1,version=v2.0 \
   --cpu host --cores $VM_CORES --memory $VM_MEMORY \
   --sata0 $VM_STORAGE:$VM_DISK_GB,cache=writeback,discard=on \
   --net0 virtio,bridge=$LAN_BRIDGE \
   --ide2 $ISO_STORAGE:iso/$WIN_ISO,media=cdrom \
-  --ide0 $ISO_STORAGE:iso/$SETUP_ISO,media=cdrom \
+  --ide0 $ISO_STORAGE:iso/$VIRTIO_ISO,media=cdrom \
+  --ide1 $ISO_STORAGE:iso/$ANSWER_ISO,media=cdrom \
   --boot "order=ide2;sata0" --agent enabled=1 --vga virtio \
   --tags "netlab;windows" --description "netlab test box" >/dev/null
 qm start $VMID

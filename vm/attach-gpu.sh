@@ -16,7 +16,7 @@ ssh "$PVE_HOST" sh -s <<EOF
 set -e
 qm shutdown $VMID --timeout 240 || qm stop $VMID
 qm set $VMID --hostpci0 $GPU,pcie=1 --boot order=sata0 >/dev/null
-qm set $VMID --delete ide0,ide2 >/dev/null 2>&1 || true
+qm set $VMID --delete ide0,ide1,ide2 >/dev/null 2>&1 || true
 qm start $VMID
 for i in \$(seq 60); do qm agent $VMID ping >/dev/null 2>&1 && { echo "up, with $GPU"; exit 0; }; sleep 5; done
 echo "no agent after 5 minutes"; exit 1
