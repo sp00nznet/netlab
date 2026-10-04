@@ -2,7 +2,7 @@
 # lan.sh <joiner machine> [fields] [out-dir]
 # The Lost World, recompiled, two players over the network: this PC hosts as
 # player 1, the joiner machine connects as player 2, and both play a script
-# (lostworld's tools/netlab/*.env: coin, start, trigger pulls). The board is
+# (host.env / joiner.env beside this script: coin, start, trigger pulls). The board is
 # deterministic and netplay is lockstep, so the two machines must stay
 # identical: each logs a hash of guest RAM every ten seconds, and the
 # scenario passes when the two logs agree line for line and neither saw a
@@ -42,11 +42,17 @@ cp "$LW/build/lostworld.exe" "$LW/build/SDL2.dll" "$LW/build-farm/"
 HOSTADDR=$(addr local) || exit 1
 
 echo "host: this PC, port $PORT, $FIELDS fields"
-( cd "$LW" && ./build/lostworld.exe "$FIELDS" --env tools/netlab/host.env --host "$PORT" ) \
+( cd "$LW" && ./build/lostworld.exe "$FIELDS" --env "$(cygpath -m "$NETLAB/scenarios/lostworld/host.env")" --host "$PORT" ) \
   > "$SCEN_OUT/host/run.log" 2>&1 &
 HOSTPID=$!
 
-role joiner lostworld-recomp "$JOINER" LW_ENV=tools/netlab/joiner.env LW_JOIN=$HOSTADDR:$PORT LW_FIELDS=$FIELDS
+# The joiner's script goes next to its build (the lostworld repo carries
+# none: these are the lab's).
+( . "$NETLAB/local/machines/$JOINER.env"
+  d=${DIR//\\//}/lostworld-recomp-joiner
+  ssh -o BatchMode=yes ${JUMP:+-J "$JUMP"} "$SSH" "New-Item -ItemType Directory -Force '$d' | Out-Null"
+  scp -q -o BatchMode=yes ${JUMP:+-o ProxyJump="$JUMP"} "$NETLAB/scenarios/lostworld/joiner.env" "$SSH:$d/joiner.env" )
+role joiner lostworld-recomp "$JOINER" LW_ENV=joiner.env LW_JOIN=$HOSTADDR:$PORT LW_FIELDS=$FIELDS
 trap 'down joiner; kill $HOSTPID 2>/dev/null' EXIT
 up joiner
 
