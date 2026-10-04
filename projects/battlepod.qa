@@ -1,0 +1,31 @@
+# battlepod: a game started the way the operator console starts one, flown
+# from the keyboard. The Mech drops in first and ignores its controls until it
+# lands; a Loki stands 150 m ahead.
+expect-window battlepod - main view 60
+wait 15
+snap drop.png
+key w
+key w
+key w
+key w
+wait 5
+snap walking.png
+wait 4
+snap closer.png
+key s
+key s
+key s
+key s
+wait 2
+key t
+wait 1
+key space
+wait 1
+key space
+wait 1
+key space
+wait 3
+snap fire.png
+key a
+wait 2
+snap turn.png

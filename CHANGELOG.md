@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 - `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
 
 ### Added
+- `projects/battlepod.env` and `battlepod.qa`: the VWE BattleTech cockpit,
+  cross-built on the `mingw` builder, played on a Windows test VM (its
+  `SDL_RENDER_DRIVER` machine variable for VMs whose GPU renderers crawl).
 - A `mingw` builder kind (`builders/mingw/setup.sh`): mingw-w64 GCC and SDL2
   for Windows, for GNU Makefile projects (`make CC=x86_64-w64-mingw32-gcc
   PKG_CONFIG=mingw-pkg-config`). Runs alongside clangcl in the same

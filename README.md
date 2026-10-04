@@ -223,6 +223,7 @@ Linux VM.
 | Simpsons Arcade (PS3) | static recompilation, x64 | yes | online match passes: host + joiner behind a NAT, through psnr's relay |
 | Red Alert 2 / Yuri's Revenge | static recompilation, x86 | yes, 4.5 min cold | LAN match passes: the workstation (`local`) hosts, the Windows test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)) |
 | Encarta 97 | static recompilation, x86 | yes | boots to an article |
+| battlepod (VWE BattleTech cockpit) | 68020 emulator, GNU Make + SDL2 | yes, on the `mingw` builder, 8 s | QA passes on the Windows test VM: self-checks, then a game played (throttle, target, fire, turn) and screenshotted |
 | Black & White | hand-translated, x86 | yes | its 9 tests run on the Windows VM |
 | Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, KotOR, X-Wing Alliance, Virtual Springfield, Catz | static recompilations | yes | not yet |
 
