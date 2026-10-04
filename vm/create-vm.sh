@@ -24,7 +24,7 @@ qm create $VMID --name $VM_NAME --ostype win10 --machine q35 --bios ovmf \
   --ide2 $ISO_STORAGE:iso/$WIN_ISO,media=cdrom \
   --ide0 $ISO_STORAGE:iso/$SETUP_ISO,media=cdrom \
   --boot "order=ide2;sata0" --agent enabled=1 --vga virtio \
-  --tags "netlab;windows" --description "recomp-netlab test box" >/dev/null
+  --tags "netlab;windows" --description "netlab test box" >/dev/null
 qm start $VMID
 # UEFI shows "Press any key to boot from CD": press it.
 for i in \$(seq 20); do sleep 1; qm sendkey $VMID ret 2>/dev/null || true; done

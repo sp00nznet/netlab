@@ -1,11 +1,11 @@
 ---
 name: netlab
-description: Build, run, play, QA and ship the user's projects through the recomp-netlab build farm (Linux builders on Proxmox; Windows and Linux test machines). Use when asked to build a project on the farm, run or test a build, drive its UI or menus, run its checks, compare builds or builders (A/B), check build times, or ship a release.
+description: Build, run, play, QA and ship the user's projects through the netlab build farm (Linux builders on Proxmox; Windows and Linux test machines). Use when asked to build a project on the farm, run or test a build, drive its UI or menus, run its checks, compare builds or builders (A/B), check build times, or ship a release.
 ---
 
 # netlab
 
-`netlab` (at the root of the recomp-netlab checkout) is the whole interface.
+`netlab` (at the root of the netlab checkout) is the whole interface.
 Run it with bash from the checkout. Every project has a recipe in
 `projects/<name>.env` or `local/projects/<name>.env`.
 

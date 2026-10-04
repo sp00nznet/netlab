@@ -17,7 +17,7 @@
 # netlab play step against that role's instance; screenshots land in
 # $SCEN_OUT/<role>/. Each function returns the step's result, so a scenario
 # can retry: `wait_log a "joined room" 8 || press a $SQUARE`.
-: "${NETLAB:?set NETLAB to the recomp-netlab checkout before sourcing scenarios/lib.sh}"
+: "${NETLAB:?set NETLAB to the netlab checkout before sourcing scenarios/lib.sh}"
 SCEN_OUT=${SCEN_OUT:-.}
 declare -A _project _machine _sets
 

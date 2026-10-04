@@ -72,7 +72,7 @@ qm create $ID --name $NAME --ostype l26 --machine q35 --cpu host \
   --net0 virtio,bridge=${LAN_BRIDGE:-vmbr0} --vga std --agent enabled=1 \
   --ciuser netlab --sshkeys /root/.ssh/authorized_keys --ipconfig0 ip=dhcp \
   --cicustom vendor=local:snippets/netlab-linux.yaml \
-  --tags "netlab;linux" --description "recomp-netlab Linux test box" >/dev/null
+  --tags "netlab;linux" --description "netlab Linux test box" >/dev/null
 qm disk resize $ID scsi0 ${LINUX_DISK_GB:-40}G >/dev/null
 qm start $ID
 echo "first boot: cloud-init installs the desktop (5-15 minutes)"
