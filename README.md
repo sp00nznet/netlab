@@ -64,6 +64,7 @@ Linux builders; "ran" means on a Windows or Linux test machine.
 | OpenNote | Win32 app | yes | QA passes: its `--selftest` and a File-menu walk |
 | connectty | Electron | AppImage + deb | QA passes on the Linux VM |
 | psnr | Go server | yes, after its tests | runs on a Linux lab host for the scenarios |
+| Black & White | hand-translated recompilation, x86 | yes | QA runs its 9 tests on the Windows VM: SKIP there (no game data), 9/9 with it |
 | Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, androidrecomp, Virtual Springfield, Catz | recompilations | yes | not yet |
 
 Fixes the farm needed are upstream or open: xboxrecomp#165, pcrecomp#40,
