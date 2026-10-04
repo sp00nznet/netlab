@@ -131,7 +131,9 @@ start() {
   remote)
     # From a scheduled task: a program started over SSH lands in session 0,
     # with no desktop. The old one stops first: Windows locks a running exe.
-    rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$ID' 2>\$null | Out-Null"
+    # exit 0: the first run of a project there has no task to end, and
+    # schtasks's error would end netlab (set -e) before anything started.
+    rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$ID' 2>\$null | Out-Null; exit 0"
     push
     EXE=$(bs "$RD/$NAME"); line=$(expand "$RUN")
     echo "run on $MACHINE: $line"
@@ -268,7 +270,7 @@ stop)
   load "$1"; machine "$ON"
   case $KIND in
   local)  taskkill //F //IM "$PROC.exe" 2>/dev/null || true ;;
-  remote) rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$ID' 2>\$null | Out-Null" ;;
+  remote) rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$ID' 2>\$null | Out-Null; exit 0" ;;
   linux)  rsh "pkill -f '$(selfsafe "$PROC")' || true" ;;
   esac ;;
 
