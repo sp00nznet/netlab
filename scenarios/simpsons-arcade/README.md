@@ -33,12 +33,13 @@ only on the machines:
 ## Verified
 
 As of 2026-10-02, on the scenario library with farm builds: **joiner behind
-a NAT**. This PC hosted, the test VM joined through the relay, and both
-reached Stage 1 with both players in the HUD.
+a NAT**. The workstation (the `local` machine: a Windows desktop on the
+LAN) hosted, the Windows test VM joined from behind the NAT bridge through
+the relay, and both reached Stage 1 with both players in the HUD.
 
 As of 2026-09-30, with ps3recomp#200 and psnr's relay:
 
-- **Two machines on a LAN:** this PC hosting, the test VM joining.
+- **Two machines on a LAN:** the workstation (`local`) hosting, the test VM joining.
 - **Host behind a NAT:** the VM hosting from behind the NAT bridge.
 - **Joiner behind a NAT:** the VM joining from behind the NAT bridge. The
   game setup went through the relay.

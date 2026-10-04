@@ -141,7 +141,7 @@ backend gets tested with nobody at the controls.
 | go from a Proxmox host and an agent to a first build and QA run | [docs/getting-started.md](docs/getting-started.md) |
 | add one of your projects | [docs/projects.md](docs/projects.md) |
 | add or create builders, or a new kind of toolchain | [docs/builders.md](docs/builders.md) |
-| set up test machines (this PC, a Windows VM with a GPU, a Linux VM) | [docs/machines.md](docs/machines.md), [vm/README.md](vm/README.md) |
+| set up test machines (your workstation, a Windows VM with a GPU, a Linux VM) | [docs/machines.md](docs/machines.md), [vm/README.md](vm/README.md) |
 | hand the lab to an agent | [docs/agents.md](docs/agents.md) |
 | write QA steps, plug in a project's own tests | [docs/qa.md](docs/qa.md) |
 | test several programs together, a NAT in between | [scenarios/README.md](scenarios/README.md), [docs/driving.md](docs/driving.md) |
@@ -220,7 +220,7 @@ Linux VM.
 | connectty | Electron | AppImage + deb | QA passes on the Linux VM |
 | psnr | Go server | yes, after its tests | runs on a Linux lab host for the scenarios |
 | Simpsons Arcade (PS3) | static recompilation, x64 | yes | online match passes: host + joiner behind a NAT, through psnr's relay |
-| Red Alert 2 / Yuri's Revenge | static recompilation, x86 | yes, 4.5 min cold | LAN match passes: this PC hosts, the test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)) |
+| Red Alert 2 / Yuri's Revenge | static recompilation, x86 | yes, 4.5 min cold | LAN match passes: the workstation (`local`) hosts, the Windows test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)) |
 | Encarta 97 | static recompilation, x86 | yes | boots to an article |
 | Black & White | hand-translated, x86 | yes | its 9 tests run on the Windows VM |
 | Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, X-Wing Alliance, Virtual Springfield, Catz | static recompilations | yes | not yet |
