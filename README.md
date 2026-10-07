@@ -224,6 +224,7 @@ Linux VM.
 | Red Alert 2 / Yuri's Revenge | static recompilation, x86 | yes, 4.5 min cold | LAN match passes: the workstation (`local`) hosts, the Windows test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)) |
 | Encarta 97 | static recompilation, x86 | yes | boots to an article |
 | Black & White | hand-translated, x86 | yes | its 9 tests run on the Windows VM |
+| Advance Wars (GBA) | static recompilation, x64, headless-only (no SDL2 on the builder) | yes, 20 s | conformance 151/151 on the workstation; SKIP on the test VM (no ROM) |
 | Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, KotOR, X-Wing Alliance, Virtual Springfield, Catz | static recompilations | yes | not yet |
 
 Next is in [ROADMAP.md](ROADMAP.md).
