@@ -210,9 +210,10 @@ The farm never sends `.git`, build output, `node_modules`, `.godot`, Unity's
 
 ## What runs on it today
 
-The author's lab, as of 2026-10-04: two Proxmox nodes, four builders
-(two clangcl, one Godot, one Node+Go), a Windows VM with an RX 6700 and a
-Linux VM.
+The author's lab, as of 2026-10-10: two Proxmox nodes, four builders
+(two clangcl that also carry mingw, one Godot, one Node+Go), a Windows VM
+with an RX 6700 and a Linux VM. A second Windows VM made from scratch by
+`vm/setup-windows.sh` installed unattended and passed OpenNote's QA.
 
 | Project | Kind | Built | Ran / QA |
 |---|---|---|---|
@@ -224,7 +225,8 @@ Linux VM.
 | Red Alert 2 / Yuri's Revenge | static recompilation, x86 | yes, 4.5 min cold | LAN match passes: the workstation (`local`) hosts, the Windows test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)) |
 | Encarta 97 | static recompilation, x86 | yes | boots to an article |
 | Black & White | hand-translated, x86 | yes | its 9 tests run on the Windows VM |
-| Advance Wars (GBA) | static recompilation, x64, headless-only (no SDL2 on the builder) | yes, 20 s | conformance 151/151 on the workstation; SKIP on the test VM (no ROM) |
+| Advance Wars (GBA) | static recompilation, x64, headless-only (no SDL2 on the builder) | yes, 37 s cold | conformance 165/165 on the workstation; SKIP on the test VM (no ROM) |
+| The Lost World (Sega Model 3) | static recompilation, x64 | not yet on the farm: needs SDL2 for clang-cl on the builders; built locally (MSVC) | two-machine netplay passes: the workstation hosts, the Windows test VM joins, both in the game, guest-RAM hashes agree line for line ([`scenarios/lostworld/lan.sh`](scenarios/lostworld/lan.sh)) |
 | Mario Kart DX, Let's Go Jungle, HL2 (Xbox), Burnout 3, Force Commander, Rise of Legends, KotOR, X-Wing Alliance, Virtual Springfield, Catz | static recompilations | yes | not yet |
 
 Next is in [ROADMAP.md](ROADMAP.md).
