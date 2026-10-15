@@ -176,6 +176,7 @@ play() {
     # SSH: quick, which menus need. Keys, clicks and snaps need the desktop.
     if ! grep -qvE '^[[:space:]]*(#.*)?$|^[[:space:]]*(wait|pad|expect-log)[[:space:]]' "$steps"; then
       rsh "Set-Location '$RD'; powershell -NoProfile -ExecutionPolicy Bypass -File play.ps1 -Steps steps.txt -Out play-out -Proc '$PROC' -Log run.log -Pad '$PAD'; exit \$LASTEXITCODE" || rc=$?
+      rcp "$SSH:$RD/play-out/*" "$dest/" 2>/dev/null || true   # what the program itself left there
       return "$rc"
     fi
     # In the desktop session: a task runs play.cmd, and we wait for it.
