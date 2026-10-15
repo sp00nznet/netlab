@@ -33,6 +33,7 @@ toolset's `build.sh`, and copies the results back.
 | `mingw` | mingw-w64 GCC (x86_64, posix threads), SDL2's mingw build, `mingw-pkg-config` (pkg-config that sees only SDL2) | `script` with `BUILDS_ON=mingw`: GNU Makefile projects cross-built for Windows. Small, so it shares a container with `clangcl` (`clangcl,mingw`) |
 | `godot` | headless Godot editors and export templates, `godot-<major.minor>` | `script` with `BUILDS_ON=godot` |
 | `rust` | stable Rust with rustfmt and clippy, `cargo xwin` with the MSVC CRT and Windows SDK already fetched | `script` with `BUILDS_ON=rust`: Linux builds and tests natively, Windows exes with `cargo xwin build --target x86_64-pc-windows-msvc` |
+| `blender` | headless Blender as `blender-<major.minor>` (5.0.1 by default), Python with numpy and Pillow; no GPU, so EEVEE runs on Mesa's llvmpipe | `script` with `BUILDS_ON=blender`: batch renders and scripted asset work. Slow (a 448×640 EEVEE frame takes about 18 s on 16 cores) but off your workstation; give it cores |
 
 Running the clangcl or rust setup accepts Microsoft's CRT/SDK licence through xwin.
 
