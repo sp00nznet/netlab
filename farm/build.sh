@@ -199,7 +199,7 @@ echo "job $JOB, log $LOG"
 cd "$W"
 if [ -d /share ]; then
   mkdir -p "/share/drops/$GAME/$JOB"
-  xargs -r -a ".artifacts-$JOB" cp -t "/share/drops/$GAME/$JOB/"
+  xargs -r -a ".artifacts-$JOB" cp -r -t "/share/drops/$GAME/$JOB/"
   echo "drop: /share/drops/$GAME/$JOB"
 fi
 EOF
@@ -209,7 +209,7 @@ EOF
 OUT="${FARM_OUT:-$GAME_DIR/build-farm}${SLOT:+-$SLOT}"
 mkdir -p "$OUT"
 for f in $(ssh "$BUILDER" "cat $W/.artifacts-$JOB && rm $W/.artifacts-$JOB"); do
-  scp -q "$BUILDER:$W/$f" "$OUT/"
+  scp -q -r "$BUILDER:$W/$f" "$OUT/"
   echo "-> $OUT/$(basename "$f")"
 done
 

@@ -15,6 +15,11 @@ All notable changes to this project are documented here. The format follows
 - `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
 
 ### Added
+- A `rust` builder kind (`builders/rust/setup.sh`): stable Rust, rustfmt,
+  clippy and cargo-xwin, with the MSVC CRT and SDK fetched at setup so the
+  first job doesn't wait for them.
+- `ARTIFACTS` can be directories: `farm/build.sh` copies them back whole,
+  and `run`/`qa` push them to a remote machine with the build.
 - A `mingw` builder kind (`builders/mingw/setup.sh`): mingw-w64 GCC and SDL2
   for Windows, for GNU Makefile projects (`make CC=x86_64-w64-mingw32-gcc
   PKG_CONFIG=mingw-pkg-config`). Runs alongside clangcl in the same

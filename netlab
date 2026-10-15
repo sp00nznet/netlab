@@ -102,7 +102,7 @@ push() {
   remote) rsh "New-Item -ItemType Directory -Force '$RD' | Out-Null" ;;
   linux)  rsh "mkdir -p '$RD'" ;;
   esac
-  rcp "$out"/* "$SSH:$RD/"
+  rcp -r "$out"/* "$SSH:$RD/"
   for f in $RUN_FILES; do
     case $KIND in
     remote) rsh "New-Item -ItemType Directory -Force '$RD/$(dirname "$f")' | Out-Null" ;;
