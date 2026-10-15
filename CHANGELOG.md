@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 - `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
 
 ### Added
+- A `blender` builder kind (`builders/blender/setup.sh`): headless Blender
+  (`blender-5.0`), numpy and Pillow, with EEVEE on Mesa's llvmpipe since
+  builders have no GPU. It renders the same images as a GPU, only slower.
 - A `rust` builder kind (`builders/rust/setup.sh`): stable Rust, rustfmt,
   clippy and cargo-xwin, with the MSVC CRT and SDK fetched at setup so the
   first job doesn't wait for them.
