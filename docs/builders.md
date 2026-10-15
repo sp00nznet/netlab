@@ -32,8 +32,9 @@ toolset's `build.sh`, and copies the results back.
 | `go` | Go | `script` with `BUILDS_ON=go` |
 | `mingw` | mingw-w64 GCC (x86_64, posix threads), SDL2's mingw build, `mingw-pkg-config` (pkg-config that sees only SDL2) | `script` with `BUILDS_ON=mingw`: GNU Makefile projects cross-built for Windows. Small, so it shares a container with `clangcl` (`clangcl,mingw`) |
 | `godot` | headless Godot editors and export templates, `godot-<major.minor>` | `script` with `BUILDS_ON=godot` |
+| `rust` | stable Rust with rustfmt and clippy, `cargo xwin` with the MSVC CRT and Windows SDK already fetched | `script` with `BUILDS_ON=rust`: Linux builds and tests natively, Windows exes with `cargo xwin build --target x86_64-pc-windows-msvc` |
 
-Running the clangcl setup accepts Microsoft's CRT/SDK licence through xwin.
+Running the clangcl or rust setup accepts Microsoft's CRT/SDK licence through xwin.
 
 ## Make one
 
@@ -87,7 +88,8 @@ one.
 
 ## A new kind
 
-Say you want Rust programs built for Windows with cargo-xwin:
+Say you want Rust programs built for Windows with cargo-xwin (the `rust` kind
+is this, finished):
 
 1. `builders/rust/setup.sh`: a plain `sh` script that installs what a build
    needs. It runs as root in a fresh Debian 13 container, from

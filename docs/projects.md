@@ -27,6 +27,9 @@ published with the project; your checkouts and machines stay in `local/`.
 |---|---|---|---|
 | `cmake` | a CMake project that builds for Windows with MSVC | `clangcl` | `BUILD_ARGS`, `TARGET`, maybe `ARTIFACTS` |
 | `script` | anything else: npm, go, godot, cargo, make, a CMake project that's not at the root | `BUILDS_ON` | `BUILD` (a command run in the project) and `ARTIFACTS` |
+
+`ARTIFACTS` can name directories (an exe's data folder, say): they come back
+whole, and `run`/`qa` copy them to a remote machine with the build.
 | `ps3recomp` | a ps3recomp game | `clangcl` | `DEPS=ps3recomp` |
 
 `script` covers most projects. A toolset of your own is a folder in
