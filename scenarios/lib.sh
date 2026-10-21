@@ -32,7 +32,22 @@ _on() {
 }
 _nl() { local cmd=$1 r=$2; shift 2; mapfile -t o < <(_on "$r"); "$NETLAB/netlab" "$cmd" "${_project[$r]}" "$@" "${o[@]}"; }
 
-up()   { _nl run "$1"; }                        # start <role>'s program on its machine
+# The first up takes every role's machine (netlab lock, in name order) for as
+# long as the scenario runs, and lets go when it exits, after the scenario's
+# own EXIT trap. Set that trap before the first up: one set after replaces
+# this, and the locks are only cleared as stale.
+_held=
+hold_all() {
+  [ -z "$_held" ] || return 0
+  local ms t
+  ms=$(printf '%s\n' "${_machine[@]}" | sort -u | grep -vxF -f <(printf '%s\n' $NETLAB_HOLDS) | tr '\n' ' ')
+  _held=1; [ -n "$ms" ] || return 0   # a caller holds them all
+  NETLAB_JOB=${NETLAB_JOB:-$(basename "$0")} "$NETLAB/netlab" lock $ms --for $$ || exit $?
+  _held=$ms; export NETLAB_HOLDS="$NETLAB_HOLDS $ms"
+  eval "t=$(trap -p EXIT | sed -E "s/^trap -- (.*) EXIT$/\1/")"
+  trap "${t:+$t;} \"\$NETLAB/netlab\" unlock $ms >/dev/null" EXIT
+}
+up()   { hold_all; _nl run "$1"; }              # start <role>'s program on its machine
 down() { _nl stop "$1" >/dev/null 2>&1 || true; }
 
 # One step (see drive/play.sh) against <role>.

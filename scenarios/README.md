@@ -28,6 +28,10 @@ role joiner simpsonsarcade-ps3 testbox PLAYER=player2 PSNR=$(addr labserver)
 - Every role gets its own folder, log and pad mailbox (`$PAD`), so two roles
   never share files.
 - `addr <machine>` is a machine's LAN address, for the others to reach it.
+- The first `up` takes the lock of every role's machine (see `netlab
+  locks`), waiting if another job has one, and lets go when the script
+  exits. Set your `trap '...' EXIT` before the first `up`: the locks are
+  added to it, and a trap set later replaces them.
 
 ## Steps
 

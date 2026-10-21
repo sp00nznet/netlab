@@ -43,6 +43,30 @@ checks each project already has.
   for big programs) before `snap`, and read the PNG to check what it shows.
   Always `stop` it when you're done.
 
+## Machine locks
+
+One job on a machine at a time. `run`, `play`, `snap`, `stop` and `qa` take
+the machine's lock (`run` keeps it until `stop`); `build` doesn't. If
+another job has it they wait and say so:
+
+```
+netlab: waiting for linuxbox, held by tester-hover, pid 16964 (netlab qa hover --on linuxbox) since 2026-10-21 14:02:11
+```
+
+After `NETLAB_LOCK_TIMEOUT` seconds (default 1800; `0` = don't wait) they
+exit **4**: the machine is busy, not broken. Say so and come back later, or
+use another machine. Your own later calls (each tool call a new shell) don't
+wait on your own `run`'s lock: it belongs to the job, not the shell.
+
+```sh
+./netlab locks                                   # who has what; "stale" = its holder is gone
+./netlab lock linuxbox -- ssh linuxbox '...'     # hold it while a command runs
+./netlab lock linuxbox                           # hold it until ./netlab unlock linuxbox
+./netlab unlock linuxbox                         # let go (also clears a stuck lock)
+```
+
+Set `NETLAB_JOB=<your job name>` so others see who holds it.
+
 ## Scenarios
 
 Several programs on several machines (an online match, a LAN game, a client
@@ -76,6 +100,13 @@ dependency, or in place of a submodule, call `farm/build.sh` directly with
   their real data. Use the test VMs for steps that change things.
 - `run` and `snap` act on a real desktop. `snap` captures only the project's
   window. Don't take full-desktop screenshots of the user's machine.
+- **Hold a machine's lock before you ssh to it.** Anything you run on a
+  test machine outside netlab (a test script, Wine, a game started by hand)
+  goes through `./netlab lock <machine> -- <cmd>`, or between `./netlab
+  lock <machine>` and `./netlab unlock <machine>`. Another job's QA run on
+  the same desktop spoils both.
+- `unlock` only your own lock or one `netlab locks` calls stale. A live
+  lock someone else holds is their job: wait, or ask.
 - Don't edit `farm/build.sh` or `netlab` while a build is running: bash
   reads scripts as it goes, so the running job breaks.
 - Machines, checkouts and builders are the user's (`local/`,
