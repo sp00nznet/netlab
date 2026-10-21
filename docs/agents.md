@@ -80,8 +80,12 @@ netlab: got linuxbox
 ```
 
 - `run` keeps its lock after it returns, until `netlab stop` or the end of
-  the job. "The job" is the agent process (`claude.exe`), not the shell, so
-  its later `play`/`snap`/`stop` calls don't wait on it; another job does.
+  the job (a failed `run` lets go at once). "The job" is the agent process
+  (`claude.exe`) plus `NETLAB_JOB`, not the shell, so its later
+  `play`/`snap`/`stop` calls don't wait on it; another job does. Subagents
+  of one Claude Code session share that process: parallel ones must each
+  set their own `NETLAB_JOB` (e.g. `NETLAB_JOB=$NETLAB_JOB/tester`) on
+  every call to keep out of each other's way.
 - After `NETLAB_LOCK_TIMEOUT` seconds (default 1800, `0` = fail at once)
   the command gives up with exit code **4**.
 - A lock whose holder died (a crashed job, a killed shell) is stale: the
@@ -91,9 +95,11 @@ netlab: got linuxbox
 - Work outside netlab, over plain ssh, needs the lock too:
   `./netlab lock linuxbox -- ssh linuxbox 'DISPLAY=:0 ./test.sh'`, or
   `./netlab lock linuxbox` ... `./netlab unlock linuxbox`.
-- `./netlab locks` shows who holds what. `./netlab unlock <machine>` clears
-  a stuck one: check `locks` first that its holder is really gone.
-- `NETLAB_JOB=<name>` names the holder in those messages.
+- `./netlab locks` shows who holds what. `./netlab unlock <machine>` lets
+  go of your own or a stale lock; another job's live one takes `--force`:
+  check first that that job has really stopped.
+- `NETLAB_JOB=<name>` names the holder in those messages. The factory sets
+  it to the job's id.
 
 Builders aren't locked: `build` places jobs by load. The locks are files on
 the machine running netlab, so two controllers (two workstations) don't see

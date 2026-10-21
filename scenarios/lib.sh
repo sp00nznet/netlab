@@ -45,7 +45,7 @@ hold_all() {
   NETLAB_JOB=${NETLAB_JOB:-$(basename "$0")} "$NETLAB/netlab" lock $ms --for $$ || exit $?
   _held=$ms; export NETLAB_HOLDS="$NETLAB_HOLDS $ms"
   eval "t=$(trap -p EXIT | sed -E "s/^trap -- (.*) EXIT$/\1/")"
-  trap "${t:+$t;} \"\$NETLAB/netlab\" unlock $ms >/dev/null" EXIT
+  trap "${t:+$t;} \"\$NETLAB/netlab\" unlock --force $ms >/dev/null" EXIT
 }
 up()   { hold_all; _nl run "$1"; }              # start <role>'s program on its machine
 down() { _nl stop "$1" >/dev/null 2>&1 || true; }

@@ -15,9 +15,11 @@ All notable changes to this project are documented here. The format follows
   same job (an agent's next tool call, `qa`'s stop, a scenario's steps)
   don't wait on their own lock. New commands: `netlab locks` (who holds
   what, live or stale), `netlab lock <machine>... [-- cmd]` (hold machines
-  for work done over plain ssh) and `netlab unlock`. Scenarios take all
+  for work done over plain ssh) and `netlab unlock` (another job's live
+  lock only with `--force`). Scenarios take all
   their machines, in name order, at the first `up` and let go when they
-  exit, failed or interrupted too. `NETLAB_JOB` names the holder. Builders
+  exit, failed or interrupted too. `NETLAB_JOB` names the holder, and tells parallel subagents of one
+  session apart. Builders
   aren't locked (that's the queue on the roadmap).
 
 ### Changed
