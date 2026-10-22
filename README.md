@@ -29,6 +29,7 @@ apps, Godot games, Go servers, static recompilations of old games.
 | **qa** | `netlab qa <project> --on <machine>` | Its own checks (a self-test, a test suite) and its steps file: PASS, FAIL or SKIP, and a report with logs and screenshots |
 | **rebuild** | `netlab check <project>` | Build, then QA, in one go: the inner loop after a change |
 | **ship** | `netlab ship <project> <tag>` | A GitHub draft release, itch.io, or the LAN share, per the recipe |
+| **locks** | `netlab locks` / `netlab lock <machine> -- <cmd>` | Who has which machine. run, play, snap, stop and qa take the machine's lock and wait for another job's; `lock` holds one for your own ssh work |
 
 ```sh
 ./netlab check opennote                  # build on the farm, then its self-test and a menu walk here

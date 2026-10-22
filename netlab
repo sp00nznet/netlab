@@ -19,12 +19,19 @@
 #   netlab times [<project>]             the cold build times that place jobs
 #   netlab status                        builders, their load, and the latest jobs
 #   netlab log   [<project>]             the newest job log (of that project)
+#   netlab locks                         who holds which machine
+#   netlab lock  <M>... [-- cmd...]      hold machines (for ssh work): until unlock, or for cmd
+#   netlab unlock <M>...                 let go of a machine (yours, or a stuck lock)
 #
 # M defaults to "local", this machine (Windows); local/machines/<M>.env names
 # the others (Windows or Linux, over SSH). --ref builds a git ref of the checkout.
+# run, play, snap, stop and qa hold the machine's lock while they work (run:
+# until stop), and wait for another job's: NETLAB_LOCK_TIMEOUT seconds
+# (default 1800, 0 = don't wait), then exit 4. NETLAB_JOB names the holder.
 # For scenarios (scenarios/lib.sh): --as <role> keeps an instance's folder,
 # task and log apart, and --set K=V gives it settings over the machine's.
 set -e -o pipefail
+CMDLINE="netlab $*"
 NETLAB=$(cd "$(dirname "$0")" && pwd)
 LOCAL="$NETLAB/local"
 die() { echo "netlab: $*" >&2; exit 1; }
@@ -223,6 +230,105 @@ fetch_log() {
   esac
 }
 
+# Machine locks: one job on a machine at a time. A lock is a directory,
+# local/locks/<machine>.lock (mkdir is atomic), with an owner file. It goes
+# when its holder ends: a command's own process (until=exit), or, for one
+# that outlives the command (run until stop, lock until unlock), the job
+# around it. A holder that died without letting go leaves a stale lock, which
+# the next taker removes. Machines in NETLAB_HOLDS are already held by a
+# caller (qa's stop, a scenario's steps): those calls skip the lock.
+# ponytail: covers this controller only; another machine running netlab has its own locks.
+LOCKS="$LOCAL/locks"
+TAKEN=()
+trap 'for m in "${TAKEN[@]}"; do rm -rf "$LOCKS/$m.lock"; done' EXIT
+winpid() { cat "/proc/$1/winpid" 2>/dev/null || echo "$1"; }   # Git Bash pid -> Windows pid
+alive() {
+  if [ -f /proc/self/winpid ]; then tasklist //FI "PID eq $1" //NH 2>/dev/null | grep -qw "$1"
+  else kill -0 "$1" 2>/dev/null; fi
+}
+# The job a lock that outlives its command belongs to: the nearest ancestor
+# that isn't a shell or ssh (claude.exe for an agent, the terminal for a
+# person). Each agent tool call is a fresh shell, so $PPID wouldn't do.
+# NETLAB_OWNER sets it (a pid), for wrappers and tests.
+anchor() {
+  [ -z "$ANCHOR" ] || return 0
+  ANCHOR=$NETLAB_OWNER
+  if [ -z "$ANCHOR" ] && [ -f /proc/self/winpid ]; then
+    # Up the Git Bash parents first: a Git Bash child's Windows parent is
+    # often a stub that's gone. Then Windows's. One line: powershell
+    # -Command drops what follows a newline.
+    local p=$$ q
+    while q=$(cat "/proc/$p/ppid" 2>/dev/null) && [ "$q" -gt 1 ] && [ -e "/proc/$q" ]; do p=$q; done
+    local ps="\$p = Get-CimInstance Win32_Process -Filter 'ProcessId=$(winpid $p)'; "
+    ps+="while (\$p -and \$p.Name -match '^(bash|sh|ssh|cmd|powershell|pwsh|conhost|env|timeout|winpty|winpty-agent)\.exe\$') "
+    ps+="{ \$p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + \$p.ParentProcessId) }; if (\$p) { \$p.ProcessId; \$p.Name }"
+    { read -r ANCHOR; read -r ANCHOR_NAME; } < <(powershell -NoProfile -Command "$ps" | tr -d '\r')
+  fi
+  [ -n "$ANCHOR" ] || ANCHOR=$(ps -o sid= -p $$ 2>/dev/null | tr -d ' ' || true)   # Linux: the session
+}
+# lock_read <dir>: its owner into L_*, and L_STATE live or stale.
+lock_read() {
+  local k v
+  L_JOB= L_PID= L_ANCHOR= L_UNTIL= L_CMD= L_SINCE= L_STATE=live
+  if [ -f "$1/owner" ]; then
+    while IFS='=' read -r k v; do printf -v "L_$k" '%s' "$v"; done < "$1/owner"
+    if [ "$L_UNTIL" = exit ]; then alive "$L_PID" || L_STATE=stale
+    else alive "$L_ANCHOR" || L_STATE=stale; fi
+  elif [ -d "$1" ] && [ -n "$(find "$1" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+    L_STATE=stale   # made, but its owner never written: the taker died
+  fi
+}
+lock_who() {
+  local p=$L_PID; [ "$L_UNTIL" = exit ] || p=$L_ANCHOR
+  echo "${L_JOB:+$L_JOB, }pid $p (${L_CMD:-?}) since ${L_SINCE:-?}$(case $L_UNTIL in stop|unlock) echo ", until netlab $L_UNTIL" ;; esac)"
+}
+# Is the lock just read held until stop/unlock by this job? The job is the
+# anchor and NETLAB_JOB: subagents of one Claude Code session share the
+# anchor (claude.exe), so they need their own NETLAB_JOB to be told apart.
+lock_mine() {
+  [ -n "$L_UNTIL" ] && [ "$L_UNTIL" != exit ] || return 1
+  anchor; [ "$L_ANCHOR" = "$ANCHOR" ] && [ "$L_JOB" = "${NETLAB_JOB:-$ANCHOR_NAME}" ]
+}
+# lock_take <machine> <until: exit|stop|unlock> [holder pid]: take it, or
+# wait for it. A lock held until stop/unlock by this same job is already ours.
+lock_take() {
+  local m=$1 until=$2 pid=${3:-$(winpid $$)} d="$LOCKS/$1.lock" t0=$SECONDS said= who
+  case " $NETLAB_HOLDS " in *" $m "*) return 0 ;; esac
+  mkdir -p "$LOCKS"
+  [ "$until" = exit ] || anchor
+  until mkdir "$d" 2>/dev/null; do
+    lock_read "$d"
+    if [ "$L_STATE" = stale ]; then
+      # One remover at a time, so two waiters can't both clear it and one
+      # of them delete the other's new lock.
+      if mkdir "$LOCKS/.reap" 2>/dev/null; then
+        lock_read "$d"
+        [ "$L_STATE" != stale ] || { echo "netlab: $m: removing a stale lock: $(lock_who)" >&2; rm -rf "$d"; }
+        rmdir "$LOCKS/.reap"
+      elif [ -n "$(find "$LOCKS/.reap" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then rmdir "$LOCKS/.reap" 2>/dev/null || true
+      else sleep 1; fi
+      continue
+    fi
+    lock_mine && { NETLAB_HOLDS="$NETLAB_HOLDS $m"; export NETLAB_HOLDS; return 0; }
+    who=$(lock_who)
+    if [ $((SECONDS - t0)) -ge "${NETLAB_LOCK_TIMEOUT:-1800}" ]; then
+      echo "netlab: gave up waiting for $m after ${NETLAB_LOCK_TIMEOUT:-1800}s: held by $who" >&2
+      echo "netlab: the machine is busy; netlab locks shows who has it" >&2
+      exit 4
+    fi
+    [ "$who" = "$said" ] || { echo "netlab: waiting for $m, held by $who" >&2; said=$who; }
+    sleep 2
+  done
+  # Released at exit unless the command keeps it (run, lock), once it's
+  # done what it took it for: a failed run, or a lock A B that gave up on B,
+  # leaves nothing behind.
+  TAKEN+=("$m")
+  printf 'JOB=%s\nPID=%s\nANCHOR=%s\nUNTIL=%s\nCMD=%s\nSINCE=%s\n' "${NETLAB_JOB:-$ANCHOR_NAME}" "$pid" "$ANCHOR" "$until" \
+    "$CMDLINE" "$(date '+%F %T')" > "$d/owner.tmp" && mv "$d/owner.tmp" "$d/owner"
+  [ -z "$said" ] || echo "netlab: got $m" >&2
+  NETLAB_HOLDS="$NETLAB_HOLDS $m"; export NETLAB_HOLDS
+}
+
 cmd=$1; shift || true
 SLOT= REF= FULL= FRESH= ON= OUT= AS=
 SETS=()
@@ -264,19 +370,24 @@ build)
   exec "$NETLAB/farm/build.sh" $FULL $FRESH ${SLOT:+--slot "$SLOT"} "$TOOLSET" "$src${REF:+@$REF}" "${deps[@]}" -- $BUILD_ARGS "$@" ;;
 
 run)
-  load "$1"; machine "$ON"
-  start ;;
+  # The program keeps the machine after netlab returns: the lock stays
+  # until netlab stop (or the job ends).
+  load "$1"; machine "$ON"; lock_take "$MACHINE" stop
+  start; TAKEN=() ;;
 
 stop)
-  load "$1"; machine "$ON"
+  load "$1"; machine "$ON"; lock_take "$MACHINE" exit
   case $KIND in
   local)  taskkill //F //IM "$PROC.exe" 2>/dev/null || true ;;
   remote) rsh "Get-Process '$PROC' -EA 0 | Stop-Process -Force; schtasks /End /TN 'netlab-$ID' 2>\$null | Out-Null; exit 0" ;;
   linux)  rsh "pkill -f '$(selfsafe "$PROC")' || true" ;;
-  esac ;;
+  esac
+  # Let go of what this job's run took (qa's own stop too: nothing runs now).
+  lock_read "$LOCKS/$MACHINE.lock"
+  if [ "$L_UNTIL" = stop ] && lock_mine; then rm -rf "$LOCKS/$MACHINE.lock"; fi ;;
 
 play)
-  load "${1:?usage: netlab play <project> <steps> [--on M] [--out D]}"; machine "$ON"
+  load "${1:?usage: netlab play <project> <steps> [--on M] [--out D]}"; machine "$ON"; lock_take "$MACHINE" exit
   steps=${2:?usage: netlab play <project> <steps> [--on M] [--out D]}
   dest=${OUT:-$LOCAL/qa/$PROJECT/$(date +%Y%m%d-%H%M%S)}
   rc=0; play "$steps" "$dest" || rc=$?
@@ -285,7 +396,7 @@ play)
 snap)
   # Only the project's own window, never the whole desktop of a machine
   # someone works at: a one-step play.
-  load "${1:?usage: netlab snap <project> <out.png> [--on M]}"; machine "$ON"
+  load "${1:?usage: netlab snap <project> <out.png> [--on M]}"; machine "$ON"; lock_take "$MACHINE" exit
   dest=${2:?usage: netlab snap <project> <out.png> [--on M]}
   t=$(mktemp -d); echo "snap $(basename "$dest")" > "$t/steps"
   play "$t/steps" "$t/out" >/dev/null || die "no window for $PROC on $MACHINE"
@@ -296,7 +407,7 @@ qa)
   # code decides (its own self-test or conformance harness), and QA_STEPS, a
   # steps file played against it while it runs. Everything lands in a report
   # under local/qa/<project>/.
-  load "${1:?usage: netlab qa <project> [--on M]}"; machine "$ON"
+  load "${1:?usage: netlab qa <project> [--on M]}"; machine "$ON"; lock_take "$MACHINE" exit
   [ -n "$QA$QA_STEPS" ] || die "$PROJECT: the recipe has no QA or QA_STEPS for a $KIND machine"
   dest=${OUT:-$LOCAL/qa/$PROJECT/$(date +%Y%m%d-%H%M%S)}; mkdir -p "$dest"
   result=PASS
@@ -392,6 +503,58 @@ log)
   f=$(ls -t "$NETLAB/farm/logs"/*${1:+$1}*.log 2>/dev/null | head -1)
   [ -n "$f" ] || die "no logs${1:+ for $1}"
   echo "$f"; grep -E '^(builder|sync|clone|job|build wall|drop|->|FAILED:)|error:' "$f" | head -40 ;;
+
+locks)
+  n=0
+  for d in "$LOCKS"/*.lock; do
+    [ -d "$d" ] || continue
+    lock_read "$d"; n=$((n + 1))
+    printf '%-12s %-6s %s\n' "$(basename "$d" .lock)" "$L_STATE" "$(lock_who)"
+  done
+  [ $n -gt 0 ] || echo "no machine is locked" ;;
+
+lock)
+  # Hold machines for work netlab doesn't do itself (ssh to the box, a test
+  # script of its own): `netlab lock <M>... -- <cmd>` holds them while cmd
+  # runs; without a cmd, until netlab unlock. --for <pid>: while that
+  # process (a scenario) lives. In name order, so two jobs can't deadlock.
+  usage="usage: netlab lock <machine>... [--for <pid>] [-- cmd...]"
+  ms=() for=
+  while [ $# -gt 0 ] && [ "$1" != -- ]; do
+    if [ "$1" = --for ]; then [ -n "$2" ] || die "$usage"; for=$2; shift 2; else ms+=("$1"); shift; fi
+  done
+  if [ "$1" = -- ]; then shift; [ $# -gt 0 ] || die "$usage (nothing after --)"; fi
+  [ ${#ms[@]} -gt 0 ] || die "$usage"
+  [ -z "$for" ] || alive "$(winpid "$for")" || die "--for $for: no such process"
+  for m in "${ms[@]}"; do [ "$m" = local ] || [ -f "$LOCAL/machines/$m.env" ] || die "no machine '$m' (local/machines/$m.env)"; done
+  mapfile -t ms < <(printf '%s\n' "${ms[@]}" | sort -u)
+  for m in "${ms[@]}"; do
+    if [ $# -gt 0 ]; then lock_take "$m" exit
+    elif [ -n "$for" ]; then lock_take "$m" exit "$(winpid "$for")"   # all go if one times out
+    else
+      lock_take "$m" unlock
+      # Already this job's run's: now it stays until unlock, not stop.
+      sed -i 's/^UNTIL=stop$/UNTIL=unlock/' "$LOCKS/$m.lock/owner"  2>/dev/null || true
+    fi
+  done
+  if [ $# -gt 0 ]; then rc=0; "$@" || rc=$?; exit $rc; fi
+  TAKEN=()
+  echo "locked: ${ms[*]}" ;;
+
+unlock)
+  # Your job's locks, and stale ones. Another job's live lock only with
+  # --force: check first (netlab locks) that the job is really stuck.
+  force=; [ "$1" != --force ] || { force=1; shift; }
+  [ $# -gt 0 ] || die "usage: netlab unlock [--force] <machine>..."
+  for m in "$@"; do
+    d="$LOCKS/$m.lock"
+    [ -d "$d" ] || { echo "$m: not locked"; continue; }
+    lock_read "$d"
+    if [ "$L_STATE" = live ] && [ -z "$force" ] && ! lock_mine; then
+      echo "netlab: $m is another job's: $(lock_who). --force if it's stuck." >&2; exit 1
+    fi
+    rm -rf "$d"; echo "$m: unlocked (was $(lock_who))"
+  done ;;
 
 *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; [ -z "$cmd" ] || exit 2 ;;
 esac

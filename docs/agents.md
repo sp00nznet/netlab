@@ -64,6 +64,46 @@ needs are all text:
 | whether QA passed | exit 0 PASS, 1 FAIL, 3 SKIP; `local/qa/<p>/<time>/qa.log` |
 | what's on screen | the PNGs from `snap` and `play`, which a multimodal model can read |
 | the farm's state | `./netlab status` |
+| who's using a machine | `./netlab locks`; exit 4 = gave up waiting for one |
+
+## Two agents, one lab
+
+Several agents (or an agent and you) can use the lab at once, but a test
+machine's desktop is one: two QA runs on it at once steal each other's
+focus and spoil both. So every command that puts something on a machine
+(`run`, `play`, `snap`, `stop`, `qa`, and `check`'s QA) takes that
+machine's lock, `local/locks/<machine>.lock`, and waits for another job's:
+
+```
+netlab: waiting for linuxbox, held by qa-hover, pid 16964 (netlab qa hover --on linuxbox) since 2026-10-21 14:02:11
+netlab: got linuxbox
+```
+
+- `run` keeps its lock after it returns, until `netlab stop` or the end of
+  the job (a failed `run` lets go at once). "The job" is the agent process
+  (`claude.exe`) plus `NETLAB_JOB`, not the shell, so its later
+  `play`/`snap`/`stop` calls don't wait on it; another job does. Subagents
+  of one Claude Code session share that process: parallel ones must each
+  set their own `NETLAB_JOB` (e.g. `NETLAB_JOB=$NETLAB_JOB/tester`) on
+  every call to keep out of each other's way.
+- After `NETLAB_LOCK_TIMEOUT` seconds (default 1800, `0` = fail at once)
+  the command gives up with exit code **4**.
+- A lock whose holder died (a crashed job, a killed shell) is stale: the
+  next command removes it and goes ahead. Ctrl-C lets go too.
+- Scenarios take all their machines at the first `up`, in name order (so
+  two scenarios can't deadlock), and let go when the script ends.
+- Work outside netlab, over plain ssh, needs the lock too:
+  `./netlab lock linuxbox -- ssh linuxbox 'DISPLAY=:0 ./test.sh'`, or
+  `./netlab lock linuxbox` ... `./netlab unlock linuxbox`.
+- `./netlab locks` shows who holds what. `./netlab unlock <machine>` lets
+  go of your own or a stale lock; another job's live one takes `--force`:
+  check first that that job has really stopped.
+- `NETLAB_JOB=<name>` names the holder in those messages. The factory sets
+  it to the job's id.
+
+Builders aren't locked: `build` places jobs by load. The locks are files on
+the machine running netlab, so two controllers (two workstations) don't see
+each other's.
 
 ## Keeping it safe
 
