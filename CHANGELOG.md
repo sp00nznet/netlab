@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- A Mac builder: builder kind `macos` (`builders/macos/setup.sh`, run once on
+  a Mac or macOS VM; docs/builders.md, "A Mac builder"). The farm reads a Mac's
+  load with `sysctl`, the `script` toolset times builds with Homebrew's `gtime`
+  there, and `/work` is a synthetic link to `~/work`. Recipe
+  `redalert2-recomp-macos`: the native macOS Red Alert 2 / Yuri's Revenge host
+  (7 minutes cold on a 4-core x86_64 VM).
 - Machine locks: one job on a test machine at a time. `run`, `play`, `snap`,
   `stop` and `qa` (so `check` too) take `local/locks/<machine>.lock`; `run`
   keeps it until `netlab stop`. Another job's lock makes them wait, saying

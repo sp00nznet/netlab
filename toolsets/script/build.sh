@@ -5,6 +5,7 @@
 set -e -o pipefail
 cd "$W/$GAME"
 [ -n "$BUILD_B64" ] || { echo "script: the recipe has no BUILD" >&2; exit 2; }
-/usr/bin/time -f "build wall %e s" bash -e -o pipefail -c "$(echo "$BUILD_B64" | base64 -d)"
+# GNU time: /usr/bin/time on Linux, Homebrew's gtime on a Mac builder
+$(command -v gtime || echo /usr/bin/time) -f "build wall %e s" bash -e -o pipefail -c "$(echo "$BUILD_B64" | base64 -d)"
 [ -n "$ARTIFACTS" ] || { echo "script: the recipe has no ARTIFACTS" >&2; exit 2; }
 ls -d $ARTIFACTS | sed "s|^|$GAME/|" > "$W/.artifacts-$JOB"
