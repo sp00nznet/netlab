@@ -1,0 +1,12 @@
+# bulkhead's window opens and lists the disks. Nothing is pressed that writes:
+# testbox's disks are real disks.
+expect-window bulkhead 30
+wait 3
+snap main.png
+# The elevation trap: netlab starts it from a non-elevated task, so this shows
+# what a double-clicked bulkhead-gui.exe does. Scan without --rebuild only
+# reads. Clicks are for the default 760x700 window at 100% DPI.
+click 100 65
+click 165 328
+wait 10
+snap scan-not-elevated.png
