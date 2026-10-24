@@ -37,6 +37,7 @@ gets each machine's own value. A scenario role can override any of them
 | A Linux VM with a desktop | `vm/create-linux-vm.sh` (Debian 13, Xfce logged on by itself, xdotool, ImageMagick) | Linux builds with a window: AppImages, Godot Linux exports. Software rendering, no GPU |
 | A Linux host without a desktop | an SSH account | servers a scenario needs (`netlab run psnr --on labserver`) |
 | Any other Windows PC | OpenSSH server, a key, an account that's logged on, `vm/prepare-game-box.ps1` | real hardware |
+| A Mac or macOS VM | `builders/macos/setup.sh` ([builders.md](builders.md#a-mac-builder)) | native Mac builds on the farm, and headless test runs over SSH. Not yet a `--on` machine: `netlab run` has no `macos` kind, so for now its machine file only records how to reach it |
 
 ## Windows: why a scheduled task
 

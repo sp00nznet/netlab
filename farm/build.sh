@@ -75,7 +75,9 @@ KIND=${FARM_KIND:-$(cat "$NETLAB/toolsets/$TOOLSET/builder" 2>/dev/null)}
 [ -f "$NETLAB/farm/builders" ] || { echo "no farm/builders (copy farm/builders.example)" >&2; exit 1; }
 [ -n "$BUILDER" ] || RANKED=$(grep -v '^#' "$NETLAB/farm/builders" | while read -r b k _; do
   [ -n "$b" ] && case ",$k," in *",$KIND,"*) true ;; *) false ;; esac || continue   # a builder can have several kinds: node,go
-  l=$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$b" 'echo $(cut -d" " -f1 /proc/loadavg) $(nproc)' 2>/dev/null) &&
+  # /proc/loadavg on Linux, sysctl's "{ 1.23 ... }" on a Mac builder
+  l=$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$b" \
+    'echo $(cut -d" " -f1 /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg | cut -d" " -f2) $(getconf _NPROCESSORS_ONLN)' 2>/dev/null) &&
     echo "$b $l"
 done | awk -v name="$NAME" -v times="$TIMES" '
   BEGIN {

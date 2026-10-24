@@ -34,8 +34,28 @@ toolset's `build.sh`, and copies the results back.
 | `godot` | headless Godot editors and export templates, `godot-<major.minor>` | `script` with `BUILDS_ON=godot` |
 | `rust` | stable Rust with rustfmt and clippy, `cargo xwin` with the MSVC CRT and Windows SDK already fetched | `script` with `BUILDS_ON=rust`: Linux builds and tests natively, Windows exes with `cargo xwin build --target x86_64-pc-windows-msvc` |
 | `blender` | headless Blender as `blender-<major.minor>` (5.0.1 by default), Python with numpy and Pillow; no GPU, so EEVEE runs on Mesa's llvmpipe | `script` with `BUILDS_ON=blender`: batch renders and scripted asset work. Slow (a 448×640 EEVEE frame takes about 18 s on 16 cores) but off your workstation; give it cores |
+| `macos` | a Mac or macOS VM, not a container: Xcode's command line tools, Homebrew's CMake, Ninja, pkgconf, SDL2, SDL2_ttf, FFmpeg and GNU time | `script` with `BUILDS_ON=macos`: native Mac builds (`redalert2-recomp-macos`). See [A Mac builder](#a-mac-builder) |
 
 Running the clangcl or rust setup accepts Microsoft's CRT/SDK licence through xwin.
+
+## A Mac builder
+
+A Mac can't be a container, so `create.sh` doesn't make one: take a Mac, or a
+macOS VM on Proxmox (an x86_64 one builds x86_64 Mac programs, an Apple silicon
+Mac arm64), with an admin account and your SSH key, and run
+`builders/macos/setup.sh` on it once:
+
+```sh
+scp builders/macos/setup.sh me@netlab-mac: && ssh -t me@netlab-mac sh setup.sh
+ssh me@netlab-mac 'sudo shutdown -r now'      # once: macOS makes /work at boot
+echo "me@netlab-mac macos" >> farm/builders
+```
+
+The farm runs the same way on it as on Linux: jobs land in `/work` (a link
+macOS makes to `~/work`, from `/etc/synthetic.conf`, since the system volume
+is read-only), the load is read with `sysctl`, and the toolsets' GNU `time -f`
+is Homebrew's `gtime`. There's no `/share` on a Mac, so builds come back to
+your workstation only.
 
 ## Make one
 
