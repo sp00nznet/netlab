@@ -108,10 +108,10 @@ COLD=$(ssh "$BUILDER" "[ -d $W/$NAME ] || echo 1")
 # .godot, Unity's Library, cargo's target) never go over: they're the bulk of
 # a project dir, and the builder makes its own. Dir names are anchored to the top of
 # each repo (burnout3/src/game is source, forcecommander/game is data).
-TOP_EXCLUDES="build build-* bin work _work _harness _drill original game disc extracted vfs pkg gamedata spu_dump runs saves scratch _local .godot Library Temp Logs target"
+TOP_EXCLUDES="build build-* bin work _work _harness _drill original game disc redump extracted vfs pkg gamedata spu_dump runs saves scratch _local .godot Library Temp Logs target"
 # KEEP="work ..." sends those dirs after all (catz keeps its lifted C in work/).
 for k in $KEEP; do TOP_EXCLUDES=" $TOP_EXCLUDES "; TOP_EXCLUDES=${TOP_EXCLUDES// $k / }; done
-ANY_EXCLUDES=".git __pycache__ node_modules *.iso *.ISO *.zip *.rar *.7z *.exe *.EXE *.dll *.DLL *.obj *.pdb *.ilk *.log"
+ANY_EXCLUDES=".git __pycache__ node_modules *.iso *.ISO *.cue *.CUE *.zip *.rar *.7z *.exe *.EXE *.dll *.DLL *.obj *.pdb *.ilk *.log"
 
 
 sync_spec() {

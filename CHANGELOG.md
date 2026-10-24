@@ -22,16 +22,6 @@ All notable changes to this project are documented here. The format follows
   session apart. Builders
   aren't locked (that's the queue on the roadmap).
 
-### Changed
-- `play.ps1` sends `key` steps as real key events with scan codes
-  (`keybd_event` + `MapVirtualKey`) instead of `SendKeys`, which sends none:
-  SDL and DirectInput games read the scan code and never saw the keys.
-- Renamed to netlab: it builds and tests every kind of project, not just
-  recompilations. The README says who it's for and shows how the pieces fit
-  (diagrams of the lab, build placement, machines, scenarios).
-- `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
-
-### Added
 - A `blender` builder kind (`builders/blender/setup.sh`): headless Blender
   (`blender-5.0`), numpy and Pillow, with EEVEE on Mesa's llvmpipe since
   builders have no GPU. It renders the same images as a GPU, only slower.
@@ -104,7 +94,19 @@ All notable changes to this project are documented here. The format follows
 - `scenarios/simpsons-arcade/`: an online match between two instances,
   verified on a LAN and with either side behind the NAT bridge.
 
+### Changed
+- `play.ps1` sends `key` steps as real key events with scan codes
+  (`keybd_event` + `MapVirtualKey`) instead of `SendKeys`, which sends none:
+  SDL and DirectInput games read the scan code and never saw the keys.
+- Renamed to netlab: it builds and tests every kind of project, not just
+  recompilations. The README says who it's for and shows how the pieces fit
+  (diagrams of the lab, build placement, machines, scenarios).
+- `farm/build.sh` reports drops as `/share/drops/...`, not one lab's pool path.
+
 ### Fixed
+- A sync no longer sends disc images kept as BIN/CUE: a top-level `redump/`
+  folder and `*.cue` files are excluded like `game/` and `*.iso`. A Redump
+  dump's 331 MB of tracks reached a builder before this.
 - Incremental syncs could build stale code: tar restored each file's Windows mtime,
   and the builders run ahead of the host (40 s measured), so a file edited inside that
   window landed older than its object and ninja skipped it. Synced files now take the
