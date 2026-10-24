@@ -225,6 +225,7 @@ with an RX 6700 and a Linux VM. A second Windows VM made from scratch by
 | Simpsons Arcade (PS3) | static recompilation, x64 | yes | online match passes: host + joiner behind a NAT, through psnr's relay |
 | Red Alert 2 / Yuri's Revenge | static recompilation, x86 | yes, 4.5 min cold | LAN match passes: the workstation (`local`) hosts, the Windows test VM joins, both in the game ([`scenarios/redalert2/lan.sh`](scenarios/redalert2/lan.sh)) |
 | Encarta 97 | static recompilation, x86 | yes | boots to an article |
+| battlepod (VWE BattleTech cockpit) | 68020 emulator, GNU Make + SDL2 | yes, on the `mingw` builder, 8 s | QA passes on the Windows test VM: self-checks, then a game played (throttle, target, fire, turn) and screenshotted |
 | Black & White | hand-translated, x86 | yes | its 9 tests run on the Windows VM |
 | Advance Wars (GBA) | static recompilation, x64, headless-only (no SDL2 on the builder) | yes, 37 s cold | conformance 165/165 on the workstation; SKIP on the test VM (no ROM) |
 | The Lost World (Sega Model 3) | static recompilation, x64 | not yet on the farm: needs SDL2 for clang-cl on the builders; built locally (MSVC) | two-machine netplay passes: the workstation hosts, the Windows test VM joins, both in the game, guest-RAM hashes agree line for line ([`scenarios/lostworld/lan.sh`](scenarios/lostworld/lan.sh)) |
