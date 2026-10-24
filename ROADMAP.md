@@ -1,5 +1,12 @@
 # Roadmap
 
+- **SDL2 on the clangcl builders** (the official VC package): The Lost World
+  builds on the farm with its window, and Advance Wars stops being
+  headless-only. Recipes require it (`CMAKE_REQUIRE_FIND_PACKAGE_SDL2`), so a
+  missing SDL2 fails the build instead of quietly making a headless exe.
+- **A Proxmox API token instead of root SSH** for creating VMs and
+  containers (a role scoped to a `netlab` pool); root only for the one-time
+  host setup (vfio, the NAT).
 - **Checks on the builder:** a toolset `CHECK` step for toolkit tests that
   run on Linux (xboxrecomp conformance, pcrecomp difftest), right after the
   build.
