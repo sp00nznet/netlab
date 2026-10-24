@@ -10,6 +10,9 @@ set -e
 XWIN=0.10.0
 apt-get update -qq
 apt-get install -y -qq clang lld llvm cmake ninja-build python3 git curl ca-certificates rsync time >/dev/null
+# Native Linux SDL3 builds (aquagene and other SDL3-from-source projects): the
+# headers SDL needs at build time; it dlopens the libraries at runtime.
+apt-get install -y -qq libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libgl-dev libdrm-dev libgbm-dev libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev >/dev/null
 ln -sf "$(ls /usr/bin/clang-cl-* | sort -V | tail -1)" /usr/bin/clang-cl
 cd /tmp
 curl -fsSL "https://github.com/Jake-Shadle/xwin/releases/download/$XWIN/xwin-$XWIN-x86_64-unknown-linux-musl.tar.gz" | tar xz
