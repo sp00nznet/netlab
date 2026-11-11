@@ -168,7 +168,9 @@ The first `expect` that times out fails the run, after a screenshot of that
 moment. `netlab qa` runs the recipe's `QA` command first (exit code decides;
 `QA_SKIP` is a regex for a harness's way of saying it skipped something, which
 is not a pass), then plays `QA_STEPS` against the running program, then
-collects `QA_ARTIFACTS`. Reports go to `local/qa/<project>/<time>/`.
+collects `QA_ARTIFACTS`. `QA` is killed after `QA_TIMEOUT` seconds (600), and a
+failure says whether it never ran or ran and failed ([docs/qa.md](docs/qa.md)).
+Reports go to `local/qa/<project>/<time>/`.
 
 ## Recipes
 

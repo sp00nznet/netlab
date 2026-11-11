@@ -94,8 +94,29 @@ machine() {
     case $KIND in local) PAD=$(winpath "$out/$ID.pad") ;; *) PAD="$RD/pad.txt" ;; esac
   fi
 }
-rsh() { ssh -o BatchMode=yes -o ConnectTimeout=10 ${JUMP:+-J "$JUMP"} "$SSH" "$@"; }
-rcp() { scp -q -o BatchMode=yes ${JUMP:+-o ProxyJump="$JUMP"} "$@"; }
+# A busy guest behind the jump sometimes drops a new connection ("banner
+# exchange", "stdio forwarding failed"). ControlMaster isn't there in Windows
+# OpenSSH, so each call retries instead: ssh's 255 is its own failure, never
+# the command's (scp has no such code, so it retries on any failure).
+# ServerAlive ends a connection that died under a running command.
+SSHO=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+rsh() {
+  local i rc
+  for i in 1 2 3; do
+    rc=0; ssh "${SSHO[@]}" ${JUMP:+-J "$JUMP"} "$SSH" "$@" || rc=$?
+    [ $rc -eq 255 ] || return $rc
+    echo "netlab: ssh to $SSH failed, try $i of 3" >&2; sleep $((i * 3))
+  done
+  return 255
+}
+rcp() {
+  local i
+  for i in 1 2 3; do
+    scp -q "${SSHO[@]}" ${JUMP:+-o ProxyJump="$JUMP"} "$@" && return 0
+    [ $i -lt 3 ] && sleep $((i * 2))
+  done
+  return 1
+}
 winpath() { if command -v cygpath >/dev/null; then cygpath -w "$1"; else echo "$1"; fi; }
 bs() { echo "$1" | tr / '\\'; }   # C:/netlab/x -> C:\netlab\x, for a remote Windows machine
 
@@ -203,25 +224,48 @@ play() {
   return "$rc"
 }
 
-# Run the recipe's QA command on the machine and wait for it; its output goes
-# to <log>, its exit code is the result.
+# Run the recipe's QA command on the machine and wait for it, at most
+# QA_TIMEOUT seconds (default 600): then it's killed, with its whole process
+# tree, and the exit code is 124. Its output goes to <log>, its exit code is
+# the result. If it never got going (no connection, the push failed), the
+# file <log>.never says why.
 qa_cmd() {
-  local log=$1
+  local log=$1 t=${QA_TIMEOUT:-600} rc=0
+  rm -f "$log.never"
   case $KIND in
   local)
     EXE=$(winpath "$out/$NAME"); line=$(expand "$QA")
     printf '@echo off\r\ncd /d %s\r\n%s\r\n' "$(winpath "$CHECKOUT")" "$line" > "$out/qa.cmd"
-    powershell -NoProfile -Command "& '$(winpath "$out/qa.cmd")'; exit \$LASTEXITCODE" > "$log" 2>&1 ;;
+    winwait "$(winpath "$out/qa.cmd")" "$t" > "$log" 2>&1 || rc=$? ;;
   remote)
-    push; EXE=$(bs "$RD/$NAME"); line=$(expand "$QA")
+    push || { echo "push to $MACHINE failed" > "$log.never"; return 1; }
+    EXE=$(bs "$RD/$NAME"); line=$(expand "$QA")
     printf '@echo off\r\ncd /d %s\r\n%s\r\n' "$(bs "$RD")" "$line" > "${TMPDIR:-/tmp}/netlab-qa.cmd"
-    rcp "${TMPDIR:-/tmp}/netlab-qa.cmd" "$SSH:$RD/qa.cmd"
-    rsh "& '$(bs "$RD/qa.cmd")'; exit \$LASTEXITCODE" > "$log" 2>&1 ;;
+    rcp "${TMPDIR:-/tmp}/netlab-qa.cmd" "$SSH:$RD/qa.cmd" || { echo "copying qa.cmd to $MACHINE failed" > "$log.never"; return 1; }
+    rsh "$(winwait_ps "$(bs "$RD/qa.cmd")" "$t")" > "$log" 2>&1 || rc=$?
+    [ $rc -ne 255 ] || echo "no ssh connection to $MACHINE" > "$log.never" ;;
   linux)
-    push; EXE="./$NAME"; line=$(expand "$QA")
-    rsh "cd '$RD' && chmod +x '$NAME' && DISPLAY=:0 XAUTHORITY=\$HOME/.Xauthority bash -c $(printf %q "$line")" > "$log" 2>&1 ;;
+    push || { echo "push to $MACHINE failed" > "$log.never"; return 1; }
+    EXE="./$NAME"; line=$(expand "$QA")
+    rsh "cd '$RD' && chmod +x '$NAME' && DISPLAY=:0 XAUTHORITY=\$HOME/.Xauthority timeout -k 10 $t bash -c $(printf %q "$line")" > "$log" 2>&1 || rc=$?
+    [ $rc -ne 255 ] || echo "no ssh connection to $MACHINE" > "$log.never" ;;
   esac
+  return $rc
 }
+# PowerShell that runs a .cmd for at most <secs>, prints its output, and exits
+# with its code; on time, kills its process tree and exits 124. Windows
+# OpenSSH starts commands in PowerShell, where a hung child would otherwise
+# hold the session open for good.
+winwait_ps() {
+  # ponytail: no double quotes in it, which don't survive sshd's hand-off to
+  # PowerShell; so stdout and stderr land in two files (stderr after).
+  echo "\$o = '$1.out'; \$p = Start-Process cmd.exe -ArgumentList '/c', '$1' -WorkingDirectory (Split-Path '$1') -NoNewWindow -RedirectStandardOutput \$o -RedirectStandardError '$1.err' -PassThru; \$h = \$p.Handle;
+    \$done = \$p.WaitForExit($2 * 1000); if (-not \$done) { taskkill /T /F /PID \$p.Id 2>&1 | Out-Null; \$p.WaitForExit(5000) | Out-Null };
+    Get-Content \$o, '$1.err' -EA 0;
+    if (-not \$done) { 'netlab: timed out after $2 s, killed'; exit 124 }
+    exit \$p.ExitCode"
+}
+winwait() { powershell -NoProfile -Command "$(winwait_ps "$1" "$2")"; }
 # The program's run.log, into the report.
 fetch_log() {
   case $KIND in
@@ -417,7 +461,20 @@ qa)
     grep -aE '^\s*(ok|PASS|FAIL|SKIP|pass|fail|skip)\b|\b(passed|failed|skipped|SKIPPED)\b' "$dest/qa.log" | tail -20 || true
     # A harness that skips a check (no disc, no toolchain) still exits 0, and
     # a skip isn't a pass: QA_SKIP (a regex) catches its way of saying so.
-    if [ $rc -ne 0 ]; then result=FAIL; echo "exit $rc" >> "$dest/qa.log"
+    # "never ran" (it didn't start, or the exe couldn't load) apart from
+    # "ran and failed", in the log, the report's result file and the summary.
+    if [ $rc -ne 0 ]; then
+      result=FAIL
+      if [ -f "$dest/qa.log.never" ]; then why="never ran: $(cat "$dest/qa.log.never")"
+      else
+        case $rc in
+        53|135|-1073741515|3221225781) why="never ran: a DLL it needs is missing (0xC0000135; the VC++ runtime for its arch?)" ;;
+        123|-1073741701|3221225595)    why="never ran: bad image (0xC000007B, 32/64-bit mismatch)" ;;
+        124)                           why="ran and timed out after ${QA_TIMEOUT:-600} s" ;;
+        *)                             why="ran and failed, exit $rc" ;;
+        esac
+      fi
+      echo "$why" >> "$dest/qa.log"; echo "  $why"; result="FAIL ($why)"
     elif [ -n "$QA_SKIP" ] && grep -aqE "$QA_SKIP" "$dest/qa.log"; then result=SKIP; fi
   fi
   if [ -n "$QA_STEPS" ]; then

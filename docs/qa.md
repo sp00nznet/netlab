@@ -29,6 +29,23 @@ QA_SKIP='phase SKIPPED|[1-9][0-9]* skipped'          # xboxrecomp conformance
 QA_SKIP='\] SKIPPED'                                  # ps3recomp regress.py
 ```
 
+## Timeouts, and "never ran" versus "ran and failed"
+
+`QA` gets `QA_TIMEOUT` seconds (default 600; a recipe or `--set` can change
+it). On time, netlab kills its whole process tree on the machine and reports
+`FAIL (ran and timed out after N s)` with whatever output it had. A failure
+says which kind it was, in the summary, `qa.log` and the report's `result`:
+
+- `never ran: ...`: no SSH connection, the push failed, or the exe couldn't
+  load: exit 0xC0000135 (cmd shows it as 53) is a missing DLL, almost always
+  the VC++ runtime for the exe's arch (x86 recomps need the x86 one;
+  `vm/prepare-game-box.ps1` installs both); 0xC000007B is a 32/64-bit mix.
+- `ran and failed, exit N`: the check itself said no.
+
+SSH and scp calls through the jump retry three times on a dropped connection
+(a busy guest sometimes doesn't answer in time); Windows OpenSSH has no
+ControlMaster to share one connection.
+
 ## Projects with no gate: reached a state, left frames
 
 Most games have input and capture hooks but nothing that decides pass or

@@ -51,7 +51,7 @@ a scheduled task for the logged-on user and starts that. The box needs:
 - the program let through the firewall (netlab does this per run).
 
 `vm/setup-windows.sh` does all of this for the VM: the answer file sets up autologon, `vm/first-boot.ps1` sets up
-SSH, and `vm/prepare-game-box.ps1` installs the VC++ runtime and `C:\netlab`.
+SSH, and `vm/prepare-game-box.ps1` installs the VC++ runtime (x64 and x86) and `C:\netlab`.
 The two scripts work on a physical PC too; set autologon there yourself
 (Sysinternals Autologon, or the registry).
 
