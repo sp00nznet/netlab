@@ -45,7 +45,9 @@ if [ "$GAME" = bop ]; then EXE=boprecomp.exe; else EXE=xvtrecomp.exe; fi
 [ -f "$CHECKOUT/build/$EXE" ] || { echo "build $CHECKOUT/build/$EXE first"; exit 2; }
 
 LOGIN="5:esc,on:credits.txt,3:esc,on:fronttxt.txt,4:move:470:125,5:click:470:125"
-SHOTS() { echo "90:shot=$1\\$2-1.png,120:shot=$1\\$2-2.png,150:shot=$1\\$2-3.png"; }
+# LONG=1 plays the match to its end (Melee's 10 minutes) and the debrief.
+if [ -n "$LONG" ]; then WATCHDOG=900; LAST=780; else WATCHDOG=300; LAST=150; fi
+SHOTS() { echo "90:shot=$1\\$2-1.png,120:shot=$1\\$2-2.png,$LAST:shot=$1\\$2-3.png"; }
 # Host: Host Game, session "net", Melee, Begin, Ready.
 HOSTKEYS="$LOGIN,8:move:323:23,9:click:323:23,12:n,12.3:e,12.6:t,13:move:345:285,14:click:345:285,35:move:33:153,36:click:33:153,45:move:37:437,46:click:37:437,60:move:37:437,61:click:37:437"
 # Joiner: Join Game (by Config.cfg's ipaddress), Ready.
@@ -61,8 +63,8 @@ setup() {
            Remove-NetFirewallRule -DisplayName 'netlab xvt $EXE' -EA 0;
            New-NetFirewallRule -DisplayName 'netlab xvt $EXE' -Direction Inbound -Action Allow -Program 'C:\\netlab\\xvt\\$EXE' -Profile Any | Out-Null" >/dev/null
   c "$CHECKOUT/build/$EXE" "$(m "$mc" SSH):$dir/$EXE" || exit 1
-  printf '@echo off\r\ncd /d C:\\netlab\\xvt\r\nset XVT_DPLOG=1\r\nC:\\netlab\\xvt\\%s --run --exe %s --game %s --watchdog 300 --keys "%s,%s" > C:\\netlab\\xvt\\run.log 2>&1\r\n' \
-    "$EXE" "$exe" "$game" "$3" "$(SHOTS 'C:\netlab\xvt' "$role")" > "$OUT/$role/run.cmd"
+  printf '@echo off\r\ncd /d C:\\netlab\\xvt\r\nset XVT_DPLOG=1\r\nC:\\netlab\\xvt\\%s --run --exe %s --game %s --watchdog %s --keys "%s,%s" > C:\\netlab\\xvt\\run.log 2>&1\r\n' \
+    "$EXE" "$exe" "$game" "$WATCHDOG" "$3" "$(SHOTS 'C:\netlab\xvt' "$role")" > "$OUT/$role/run.cmd"
   c "$OUT/$role/run.cmd" "$(m "$mc" SSH):$dir/run.cmd" || exit 1
   r "$mc" "schtasks /Create /TN netlab-xvt /TR C:\\netlab\\xvt\\run.cmd /SC ONCE /ST 23:59 /IT /F | Out-Null" >/dev/null
 }
@@ -80,7 +82,7 @@ echo "host on $1 ($HOSTADDR), $GAME"
 for i in $(seq 1 30); do r "$1" "Select-String -Quiet -Path C:\\netlab\\xvt\\run.log -Pattern 'hosting'" | grep -q True && break; sleep 3; done
 r "$2" "schtasks /Run /TN netlab-xvt" >/dev/null
 echo "joiner on $2"
-for i in $(seq 1 60); do r "$1" "Test-Path C:\\netlab\\xvt\\host-3.png" | grep -q True && break; sleep 5; done
+for i in $(seq 1 $((LAST / 5 + 30))); do r "$1" "Test-Path C:\\netlab\\xvt\\host-3.png" | grep -q True && break; sleep 5; done
 sleep 5
 
 for role in host joiner; do
