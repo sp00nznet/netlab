@@ -1,5 +1,5 @@
 #!/bin/bash
-# lan.sh <host machine> <joiner machine> [xvt|bop] [out-dir]
+# lan.sh <host machine> <joiner machine>[,<joiner machine>...] [xvt|bop] [out-dir]
 # X-Wing vs TIE Fighter (or Balance of Power), recompiled, against itself over
 # the LAN on the recomp's own DirectPlay (xvt-recomp's src/runtime/dplay.c,
 # TCP 47700): the host names a session, picks Melee and begins; the joiner
@@ -22,7 +22,7 @@ GAME=${3:-xvt}
 OUT=${4:-$NETLAB/local/scenarios/$GAME-lan-$(date +%Y%m%d-%H%M%S)}
 CHECKOUT=$(awk '$1 == "xvt" {print $2}' "$NETLAB/local/checkouts")
 [ -n "$CHECKOUT" ] || { echo "no xvt checkout in local/checkouts"; exit 2; }
-mkdir -p "$OUT/host" "$OUT/joiner"
+mkdir -p "$OUT/host"
 
 # m <machine> <var>: a machine file's variable.
 m() { ( . "$NETLAB/local/machines/$1.env"; eval "echo \"\${$2}\"" ); }
@@ -49,7 +49,7 @@ LOGIN="5:esc,on:credits.txt,3:esc,on:fronttxt.txt,4:move:470:125,5:click:470:125
 if [ -n "$LONG" ]; then WATCHDOG=900; LAST=780; else WATCHDOG=300; LAST=150; fi
 SHOTS() { echo "90:shot=$1\\$2-1.png,120:shot=$1\\$2-2.png,$LAST:shot=$1\\$2-3.png"; }
 # Host: Host Game, session "net", Melee, Begin, Ready.
-HOSTKEYS="$LOGIN,8:move:323:23,9:click:323:23,12:n,12.3:e,12.6:t,13:move:345:285,14:click:345:285,35:move:33:153,36:click:33:153,45:move:37:437,46:click:37:437,60:move:37:437,61:click:37:437"
+HOSTKEYS="$LOGIN,8:move:323:23,9:click:323:23,12:n,12.3:e,12.6:t,13:move:345:285,14:click:345:285,60:move:33:153,61:click:33:153,70:move:37:437,71:click:37:437,85:move:37:437,86:click:37:437,97:click:37:437,109:click:37:437"
 # Joiner: Join Game (by Config.cfg's ipaddress), Ready.
 JOINKEYS="$LOGIN,8:move:443:23,9:click:443:23,45:move:37:437,46:click:37:437"
 
@@ -70,34 +70,38 @@ setup() {
 }
 
 HOSTADDR=$(m "$1" SSH); HOSTADDR=${HOSTADDR#*@}
+IFS=, read -ra JOINERS <<< "$2"          # one machine per joiner: testbox2,testbox3
 setup host "$1" "$HOSTKEYS"
-setup joiner "$2" "$JOINKEYS"
-# The joiner joins the host's address.
-CFG=$(m "$2" XVT_GAME); [ "$GAME" = bop ] && CFG="$CFG\\BalanceOfPower\\config2.cfg" || CFG="$CFG\\Config.cfg"
-r "$2" "\$p='$CFG'; (Get-Content \$p) -replace '^ipaddress.*','ipaddress $HOSTADDR' | Set-Content -Encoding ascii \$p" >/dev/null
+n=0
+for mc in "${JOINERS[@]}"; do
+  n=$((n + 1)); mkdir -p "$OUT/joiner$n"
+  setup "joiner$n" "$mc" "$JOINKEYS"
+  # Each joiner joins the host's address.
+  CFG=$(m "$mc" XVT_GAME); [ "$GAME" = bop ] && CFG="$CFG\BalanceOfPower\config2.cfg" || CFG="$CFG\Config.cfg"
+  r "$mc" "\$p='$CFG'; (Get-Content \$p) -replace '^ipaddress.*','ipaddress $HOSTADDR' | Set-Content -Encoding ascii \$p" >/dev/null
+done
 
-trap 'r "$1" "Get-Process xvtrecomp,boprecomp -EA 0 | Stop-Process -Force" >/dev/null; r "$2" "Get-Process xvtrecomp,boprecomp -EA 0 | Stop-Process -Force" >/dev/null' EXIT
+stop_all() { for mc in "$1" "${JOINERS[@]}"; do r "$mc" "Get-Process xvtrecomp,boprecomp -EA 0 | Stop-Process -Force" >/dev/null; done; }
+trap 'stop_all "$1"' EXIT
 r "$1" "schtasks /Run /TN netlab-xvt" >/dev/null
 echo "host on $1 ($HOSTADDR), $GAME"
-for i in $(seq 1 30); do r "$1" "Select-String -Quiet -Path C:\\netlab\\xvt\\run.log -Pattern 'hosting'" | grep -q True && break; sleep 3; done
-r "$2" "schtasks /Run /TN netlab-xvt" >/dev/null
-echo "joiner on $2"
-for i in $(seq 1 $((LAST / 5 + 30))); do r "$1" "Test-Path C:\\netlab\\xvt\\host-3.png" | grep -q True && break; sleep 5; done
+for i in $(seq 1 30); do r "$1" "Select-String -Quiet -Path C:\netlab\xvt\run.log -Pattern 'hosting'" | grep -q True && break; sleep 3; done
+for mc in "${JOINERS[@]}"; do r "$mc" "schtasks /Run /TN netlab-xvt" >/dev/null; echo "joiner on $mc"; done
+for i in $(seq 1 $((LAST / 5 + 30))); do r "$1" "Test-Path C:\netlab\xvt\host-3.png" | grep -q True && break; sleep 5; done
 sleep 5
 
-for role in host joiner; do
-  mc=$1; [ $role = joiner ] && mc=$2
-  c "$(m "$mc" SSH):C:/netlab/xvt/$role-*.png" "$OUT/$role/" 2>/dev/null
-  c "$(m "$mc" SSH):C:/netlab/xvt/run.log" "$OUT/$role/run.log"
-done
+fetch() { c "$(m "$2" SSH):C:/netlab/xvt/$1-*.png" "$OUT/$1/" 2>/dev/null; c "$(m "$2" SSH):C:/netlab/xvt/run.log" "$OUT/$1/run.log"; }
+fetch host "$1"
+n=0; for mc in "${JOINERS[@]}"; do n=$((n + 1)); fetch "joiner$n" "$mc"; done
 
 fail=0
-grep -q "node 2 joined" "$OUT/host/run.log" || { echo "FAIL: nobody joined the host"; fail=1; }
-grep -q "\] joined " "$OUT/joiner/run.log" || { echo "FAIL: the joiner did not join"; fail=1; }
-for role in host joiner; do
-  grep -q "=== fault" "$OUT/$role/run.log" && { echo "FAIL: the $role faulted"; fail=1; }
-  grep -qE "frames: [1-9][0-9]* with 3D" "$OUT/$role/run.log" || { echo "FAIL: the $role never drew the mission"; fail=1; }
+grep -q "node $((${#JOINERS[@]} + 1)) joined" "$OUT/host/run.log" || { echo "FAIL: not every joiner reached the host"; fail=1; }
+roles="host"; for k in $(seq 1 ${#JOINERS[@]}); do roles="$roles joiner$k"; done
+for role in $roles; do
+  [ $role != host ] && ! grep -q "\] joined " "$OUT/$role/run.log" && { echo "FAIL: $role did not join"; fail=1; }
+  grep -q "=== fault" "$OUT/$role/run.log" && { echo "FAIL: $role faulted"; fail=1; }
+  grep -qE "frames: [1-9][0-9]* with 3D" "$OUT/$role/run.log" || { echo "FAIL: $role never drew the mission"; fail=1; }
   grep -h "not provided" "$OUT/$role/run.log" | sort -u | sed "s/^/  $role: /"
 done
-echo "pictures: $OUT/{host,joiner}/*.png"
-[ $fail = 0 ] && echo "PASS: $GAME LAN, host and joiner both in the match" || exit 1
+echo "pictures: $OUT/<role>/*.png"
+[ $fail = 0 ] && echo "PASS: $GAME LAN, host and ${#JOINERS[@]} joiner(s) all in the match" || exit 1
