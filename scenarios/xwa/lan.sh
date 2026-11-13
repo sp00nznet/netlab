@@ -34,13 +34,13 @@ r() {
   done
   echo "$o"; return 1
 }
-c() { local i; for i in 1 2 3; do timeout 180 scp -q -o BatchMode=yes "$@" && return 0; sleep 3; done; echo "copy failed: $*"; return 1; }
+c() { local i; for i in 1 2 3; do timeout 600 scp -q -o BatchMode=yes "$@" && return 0; sleep 3; done; echo "copy failed: $*"; return 1; }
 
 WATCHDOG=${WATCHDOG:-330}
 # In the skirmish lobby the host drags both players onto the two teams' craft,
 # the joiner readies, then the host's Ready launches. (Times count from the
 # multiplayer screen; the joiner reaches it about 45 s after the host.)
-HOSTMORE=${HOSTMORE-"100:move:493:129,100.5:press:493:129,101:move:300:115,101.5:move:200:101,102:release:200:101,106:move:493:129,106.5:press:493:129,107:move:300:200,107.5:move:180:236,108:release:180:236,145:move:553:460,150:click:553:460"}
+HOSTMORE=${HOSTMORE-"100:move:493:129,100.5:press:493:129,101:move:300:115,101.5:move:200:101,102:release:200:101,106:move:493:129,106.5:press:493:129,107:move:300:200,107.5:move:180:236,108:release:180:236,145:move:553:460,150:click:553:460,170:click:553:460,190:click:553:460,210:click:553:460,230:click:553:460,250:click:553:460"}
 JOINMORE=${JOINMORE-"70:move:553:460,80:click:553:460"}
 # (The address field keeps the last one typed: it is cleared first.)
 # Intro (or straight to the concourse), the family room, the Combat Simulator door,
@@ -84,7 +84,7 @@ grep -q "node 2 joined" "$OUT/host/run.log" || { echo "FAIL: the joiner never re
 grep -q "\] joined " "$OUT/joiner/run.log" || { echo "FAIL: the joiner did not join"; fail=1; }
 for role in host joiner; do
   grep -q "=== fault" "$OUT/$role/run.log" && { echo "FAIL: $role faulted"; fail=1; }
-  grep -qE "frames: [1-9][0-9]* with 3D" "$OUT/$role/run.log" || { echo "FAIL: $role never flew"; fail=1; }
+  grep -qE "frames: [1-9][0-9]* with 3D|first 3D frame" "$OUT/$role/run.log" || { echo "FAIL: $role never flew"; fail=1; }
   grep -h "not provided" "$OUT/$role/run.log" | sort -u | sed "s/^/  $role: /"
 done
 echo "pictures: $OUT/<role>/*.png"

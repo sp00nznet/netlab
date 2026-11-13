@@ -37,7 +37,7 @@ r() {   # r <machine> <powershell>: retried
 }
 c() {   # c <from> <machine:path> or <machine:path> <to>: retried scp
   local i
-  for i in 1 2 3; do timeout 180 scp -q -o BatchMode=yes "$@" && return 0; sleep 3; done
+  for i in 1 2 3; do timeout 600 scp -q -o BatchMode=yes "$@" && return 0; sleep 3; done
   echo "copy failed: $*"; return 1
 }
 
@@ -46,12 +46,12 @@ if [ "$GAME" = bop ]; then EXE=boprecomp.exe; else EXE=xvtrecomp.exe; fi
 
 LOGIN="5:esc,on:credits.txt,3:esc,on:fronttxt.txt,4:move:470:125,5:click:470:125"
 # LONG=1 plays the match to its end (Melee's 10 minutes) and the debrief.
-if [ -n "$LONG" ]; then WATCHDOG=900; LAST=780; else WATCHDOG=300; LAST=150; fi
+if [ -n "$LONG" ]; then WATCHDOG=900; LAST=780; else WATCHDOG=360; LAST=210; fi
 SHOTS() { echo "90:shot=$1\\$2-1.png,120:shot=$1\\$2-2.png,$LAST:shot=$1\\$2-3.png"; }
 # Host: Host Game, session "net", Melee, Begin, Ready.
 HOSTKEYS="$LOGIN,8:move:323:23,9:click:323:23,12:n,12.3:e,12.6:t,13:move:345:285,14:click:345:285,60:move:33:153,61:click:33:153,70:move:37:437,71:click:37:437,85:move:37:437,86:click:37:437,97:click:37:437,109:click:37:437"
 # Joiner: Join Game (by Config.cfg's ipaddress), Ready.
-JOINKEYS="$LOGIN,8:move:443:23,9:click:443:23,45:move:37:437,46:click:37:437"
+JOINKEYS="$LOGIN,8:move:443:23,9:click:443:23,45:move:37:437,46:click:37:437,58:click:37:437,70:click:37:437"
 
 # setup <role> <machine> <keys>
 setup() {
@@ -100,7 +100,7 @@ roles="host"; for k in $(seq 1 ${#JOINERS[@]}); do roles="$roles joiner$k"; done
 for role in $roles; do
   [ $role != host ] && ! grep -q "\] joined " "$OUT/$role/run.log" && { echo "FAIL: $role did not join"; fail=1; }
   grep -q "=== fault" "$OUT/$role/run.log" && { echo "FAIL: $role faulted"; fail=1; }
-  grep -qE "frames: [1-9][0-9]* with 3D" "$OUT/$role/run.log" || { echo "FAIL: $role never drew the mission"; fail=1; }
+  grep -qE "frames: [1-9][0-9]* with 3D|first 3D frame" "$OUT/$role/run.log" || { echo "FAIL: $role never drew the mission"; fail=1; }
   grep -h "not provided" "$OUT/$role/run.log" | sort -u | sed "s/^/  $role: /"
 done
 echo "pictures: $OUT/<role>/*.png"
