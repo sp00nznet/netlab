@@ -42,7 +42,9 @@ done
 for v in "$NAME" "$ID" "$CORES" "$MEMORY" "$VGA" "$AUDIO"; do
   case $v in *[!A-Za-z0-9._-]*) echo "bad value: $v" >&2; exit 2 ;; esac
 done
-[ "$ID" != next ] || ID=$(ssh "$PVE_HOST" pvesh get /cluster/nextid)
+for v in "$CORES" "$MEMORY"; do case $v in ''|*[!0-9]*) echo "not a number: $v" >&2; exit 2 ;; esac; done
+case $ID in next) ID=$(ssh "$PVE_HOST" pvesh get /cluster/nextid) ;; ''|*[!0-9]*) echo "--vmid: a number or next" >&2; exit 2 ;; esac
+for v in "$NAME" "$VGA" "$AUDIO"; do case $v in -*) echo "values can't start with -: $v" >&2; exit 2 ;; esac; done
 STORE=${LINUX_STORAGE:-$VM_STORAGE}
 IMG=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
 SNIPPET=netlab-linux.yaml

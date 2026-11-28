@@ -464,14 +464,19 @@ console)
   . "$NETLAB/lab.env"
   VMID=; . "$LOCAL/machines/$m.env"
   [[ $VMID =~ ^[0-9]+$ ]] || die "$m: no VMID= in local/machines/$m.env"
-  lock_take "$m" exit
   pve() { ssh "${SSHO[@]}" "$PVE_HOST" "$@"; }
+  # Only ever a netlab VM: a typo in a machine file mustn't reach someone else's.
+  pve "qm config $VMID" 2>/dev/null | grep -q '^tags:.*netlab' || die "VM $VMID isn't tagged netlab on the Proxmox host"
+  lock_take "$m" exit
   # Everything reaches a root shell on the Proxmox host: names are checked, never quoted around.
-  sendkeys() { pve "for k in $*; do qm sendkey $VMID \$k; done"; }
+  sendkeys() {
+    local k
+    for k in "$@"; do [[ $k =~ ^[a-z0-9_-]+$ ]] || die "bad key '$k' (qm sendkey names: ctrl-alt-f2, ret, a)"; done
+    pve "for k in $*; do qm sendkey $VMID \$k; done"
+  }
   case $verb in
   key)
     [ $# -gt 0 ] || die "$usage"
-    for k in "$@"; do [[ $k =~ ^[a-z0-9_-]+$ ]] || die "bad key '$k' (qm sendkey names: ctrl-alt-f2, ret, a)"; done
     sendkeys "$@" ;;
   type)
     text=${1?$usage}; keys=()
