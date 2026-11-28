@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- LAN scenarios for X-Wing Alliance (`scenarios/xwa/lan.sh`, a host and several
+  joiners) and Star Wars: Galactic Battlegrounds (`scenarios/swgb/lan.sh`), and the
+  `swgb-recomp` recipe. `scenarios/xvt/lan.sh` gets the joiner's Next clicks and
+  the slower-host timing (#33).
 - A Mac builder: builder kind `macos` (`builders/macos/setup.sh`, run once on
   a Mac or macOS VM; docs/builders.md, "A Mac builder"). The farm reads a Mac's
   load with `sysctl`, the `script` toolset times builds with Homebrew's `gtime`
