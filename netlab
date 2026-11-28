@@ -12,6 +12,8 @@
 #   netlab play  <project> <steps> [--on M] [--out D]   keys, clicks, menus, pad, expects, snaps
 #   netlab snap  <project> <out.png> [--on M]    a screenshot of its window
 #   netlab stop  <project> [--on M]
+#   netlab console <M> key <combo>... | type <text> | snap <out.png> | snapshot <name> | rollback <name>
+#                                        a VM's own screen through Proxmox: no desktop needed
 #   netlab qa    <project> [--on M] [--slot S]   its checks (QA, QA_STEPS): PASS/FAIL/SKIP + a report
 #   netlab check <project> [--on M]              build, then qa
 #   netlab ship  <project> <tag> [--slot S]      publish the last build (SHIP in the recipe)
@@ -445,6 +447,70 @@ snap)
   t=$(mktemp -d); echo "snap $(basename "$dest")" > "$t/steps"
   play "$t/steps" "$t/out" >/dev/null || die "no window for $PROC on $MACHINE"
   mv "$t/out/$(basename "$dest")" "$dest"; rm -rf "$t"; echo "$dest" ;;
+
+console)
+  # A VM's real screen and keyboard, through Proxmox (qm), for a box whose
+  # console is the thing under test (tty1, a kiosk, a boot menu): no desktop,
+  # xdotool or SSH session in the guest. The machine's env names its VMID; the
+  # Proxmox host is lab.env's PVE_HOST.
+  #   key <combo>...     qm sendkey, one per combo: ctrl-alt-f2, ret, shift-a, grave
+  #   type <text>        the text, a key at a time (letters, digits, space, common punctuation)
+  #   snap <out.png>     the screen as a PNG (QEMU screendump)
+  #   snapshot <name>    shut down, snapshot the stopped VM, start it again
+  #   rollback <name>    back to that snapshot, then a cold boot
+  usage="usage: netlab console <machine> key <combo>... | type <text> | snap <out.png> | snapshot <name> | rollback <name>"
+  m=${1:?$usage}; verb=${2:?$usage}; shift 2
+  [ -f "$LOCAL/machines/$m.env" ] || die "no machine '$m' (local/machines/$m.env)"
+  . "$NETLAB/lab.env"
+  VMID=; . "$LOCAL/machines/$m.env"
+  [[ $VMID =~ ^[0-9]+$ ]] || die "$m: no VMID= in local/machines/$m.env"
+  lock_take "$m" exit
+  pve() { ssh "${SSHO[@]}" "$PVE_HOST" "$@"; }
+  # Everything reaches a root shell on the Proxmox host: names are checked, never quoted around.
+  sendkeys() { pve "for k in $*; do qm sendkey $VMID \$k; done"; }
+  case $verb in
+  key)
+    [ $# -gt 0 ] || die "$usage"
+    for k in "$@"; do [[ $k =~ ^[a-z0-9_-]+$ ]] || die "bad key '$k' (qm sendkey names: ctrl-alt-f2, ret, a)"; done
+    sendkeys "$@" ;;
+  type)
+    text=${1?$usage}; keys=()
+    for ((i = 0; i < ${#text}; i++)); do
+      c=${text:i:1}
+      case $c in
+        [a-z0-9]) keys+=("$c") ;;
+        [A-Z]) keys+=("shift-${c,,}") ;;
+        ' ') keys+=(spc) ;; -) keys+=(minus) ;; _) keys+=(shift-minus) ;; =) keys+=(equal) ;;
+        .) keys+=(dot) ;; ,) keys+=(comma) ;; /) keys+=(slash) ;; \;) keys+=(semicolon) ;;
+        :) keys+=(shift-semicolon) ;; "'") keys+=(apostrophe) ;; '"') keys+=(shift-apostrophe) ;;
+        '~') keys+=(shift-grave_accent) ;; '|') keys+=(shift-backslash) ;; '>') keys+=(shift-dot) ;;
+        '<') keys+=(shift-comma) ;; '$') keys+=(shift-4) ;; '&') keys+=(shift-7) ;; '*') keys+=(shift-8) ;;
+        '(') keys+=(shift-9) ;; ')') keys+=(shift-0) ;; '@') keys+=(shift-2) ;; '!') keys+=(shift-1) ;;
+        '#') keys+=(shift-3) ;; '%') keys+=(shift-5) ;; '+') keys+=(shift-equal) ;; '\') keys+=(backslash) ;;
+        *) die "type: no key for '$c'" ;;
+      esac
+    done
+    sendkeys "${keys[@]}" ;;
+  snap)
+    # Proxmox's QEMU has no libpng: a PPM, made a PNG here (ffmpeg).
+    dest=${1:?$usage}; f=/tmp/netlab-console-$VMID-$$.ppm
+    command -v ffmpeg >/dev/null || die "console snap needs ffmpeg on this machine"
+    # qm monitor reads ahead: keep its stdin open until QEMU has written the file.
+    pve "(echo 'screendump $f'; for i in \$(seq 50); do [ -s $f ] && break; sleep 0.1; done; sleep 0.3) | qm monitor $VMID >/dev/null 2>&1; cat $f && rm -f $f" > "$dest.ppm"
+    ffmpeg -loglevel error -y -i "$dest.ppm" "$dest" && rm -f "$dest.ppm"
+    [ -s "$dest" ] || die "no screen from VM $VMID"
+    echo "$dest" ;;
+  snapshot|rollback)
+    name=${1:?$usage}
+    [[ $name =~ ^[A-Za-z][A-Za-z0-9_-]*$ ]] || die "bad snapshot name '$name'"
+    if [ $verb = snapshot ]; then
+      pve "qm shutdown $VMID --timeout 120 || qm stop $VMID; qm snapshot $VMID $name && qm start $VMID"
+    else
+      pve "qm stop $VMID >/dev/null 2>&1; qm rollback $VMID $name && qm start $VMID"
+    fi
+    echo "$m: $verb $name, started" ;;
+  *) die "$usage" ;;
+  esac ;;
 
 qa)
   # The project's checks, against its last build: QA, a command whose exit

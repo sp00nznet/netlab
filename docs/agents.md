@@ -63,6 +63,7 @@ needs are all text:
 | whether a build passed | the exit code; `./netlab log <p>` for why |
 | whether QA passed | exit 0 PASS, 1 FAIL, 3 SKIP; `local/qa/<p>/<time>/qa.log` |
 | what's on screen | the PNGs from `snap` and `play`, which a multimodal model can read |
+| a VM's own console (tty1, a kiosk, no desktop) | `./netlab console <M> snap/key/type`, `snapshot`/`rollback` for a clean start (vm/README.md) |
 | the farm's state | `./netlab status` |
 | who's using a machine | `./netlab locks`; exit 4 = gave up waiting for one |
 
