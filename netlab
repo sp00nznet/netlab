@@ -453,7 +453,8 @@ console)
   # console is the thing under test (tty1, a kiosk, a boot menu): no desktop,
   # xdotool or SSH session in the guest. The machine's env names its VMID; the
   # Proxmox host is lab.env's PVE_HOST.
-  #   key <combo>...     qm sendkey, one per combo: ctrl-alt-f2, ret, shift-a, grave
+  #   key <combo>...     qm sendkey, one per combo: ctrl-alt-f2, ret, shift-a, grave_accent;
+  #                      combo@ms holds it that long (space@3000)
   #   type <text>        the text, a key at a time (letters, digits, space, common punctuation)
   #   snap <out.png>     the screen as a PNG (QEMU screendump)
   #   snapshot <name>    shut down, snapshot the stopped VM, start it again
@@ -471,8 +472,12 @@ console)
   # Everything reaches a root shell on the Proxmox host: names are checked, never quoted around.
   sendkeys() {
     local k
-    for k in "$@"; do [[ $k =~ ^[a-z0-9_-]+$ ]] || die "bad key '$k' (qm sendkey names: ctrl-alt-f2, ret, a)"; done
-    pve "for k in $*; do qm sendkey $VMID \$k; done"
+    local cmd=
+    for k in "$@"; do
+      [[ $k =~ ^[a-z0-9_-]+(@[0-9]{1,5})?$ ]] || die "bad key '$k' (qm sendkey names: ctrl-alt-f2, ret, a; space@3000 holds it 3 s)"
+      if [[ $k == *@* ]]; then cmd+="(echo 'sendkey ${k%@*} ${k#*@}'; sleep $(( ${k#*@} / 1000 + 1 ))) | qm monitor $VMID >/dev/null 2>&1; "; else cmd+="qm sendkey $VMID $k; "; fi
+    done
+    pve "$cmd"
   }
   case $verb in
   key)
