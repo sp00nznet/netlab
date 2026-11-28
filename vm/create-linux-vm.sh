@@ -8,16 +8,62 @@
 # No GPU: Mesa renders in software, which is enough for apps and 2D/light 3D.
 #
 # Reads LINUX_* from lab.env. Returns when the desktop is up, and prints the
-# address for local/machines/<name>.env (KIND=linux, SSH=netlab@<address>).
+# address for local/machines/<name>.env (KIND=linux, SSH=netlab@<address>,
+# VMID=<id> for netlab console).
+#
+# Flags win over lab.env, for a second VM that isn't the Linux test box:
+#   --no-desktop       console only: no Xfce, LightDM, xdotool or ImageMagick;
+#                      boots to multi-user.target (its own cloud-init snippet)
+#   --name N  --vmid N|next  --cores N  --memory MB
+#   --vga TYPE         std (the default), virtio, qxl...
+#   --audio DEV        a sound card with no host backend (ich9-intel-hda)
+# e.g. vm/create-linux-vm.sh --no-desktop --name fpsos-vm --vmid next \
+#        --vga virtio --cores 4 --memory 4096 --audio ich9-intel-hda
 set -e
 NETLAB=$(cd "$(dirname "$0")/.." && pwd)
 . "$NETLAB/lab.env"
-ID=${LINUX_VMID:?set LINUX_VMID in lab.env}
+ID=${LINUX_VMID:-next}
 NAME=${LINUX_VM_NAME:-netlab-linux}
+CORES=${LINUX_CORES:-4} MEMORY=${LINUX_MEMORY:-8192}
+VGA=std AUDIO= DESKTOP=1
+while [ $# -gt 0 ]; do
+  case $1 in
+    --no-desktop) DESKTOP=; shift ;;
+    --name)   NAME=$2; shift 2 ;;
+    --vmid)   ID=$2; shift 2 ;;
+    --cores)  CORES=$2; shift 2 ;;
+    --memory) MEMORY=$2; shift 2 ;;
+    --vga)    VGA=$2; shift 2 ;;
+    --audio)  AUDIO=$2; shift 2 ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
+  esac
+done
+# Everything below lands in a root shell on the Proxmox host: plain values only.
+for v in "$NAME" "$ID" "$CORES" "$MEMORY" "$VGA" "$AUDIO"; do
+  case $v in *[!A-Za-z0-9._-]*) echo "bad value: $v" >&2; exit 2 ;; esac
+done
+for v in "$CORES" "$MEMORY"; do case $v in ''|*[!0-9]*) echo "not a number: $v" >&2; exit 2 ;; esac; done
+case $ID in next) ID=$(ssh "$PVE_HOST" pvesh get /cluster/nextid) ;; ''|*[!0-9]*) echo "--vmid: a number or next" >&2; exit 2 ;; esac
+for v in "$NAME" "$VGA" "$AUDIO"; do case $v in -*) echo "values can't start with -: $v" >&2; exit 2 ;; esac; done
 STORE=${LINUX_STORAGE:-$VM_STORAGE}
 IMG=https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+SNIPPET=netlab-linux.yaml
+[ -n "$DESKTOP" ] || SNIPPET=netlab-linux-console.yaml
 
 # cloud-init vendor data: the part Proxmox's own cloud-init settings don't cover.
+if [ -z "$DESKTOP" ]; then
+# Console only: the guest agent (the wait below pings it) and nothing else.
+ssh "$PVE_HOST" "mkdir -p /var/lib/vz/snippets && cat > /var/lib/vz/snippets/$SNIPPET" <<'EOF'
+#cloud-config
+package_update: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent || (sleep 5; systemctl start qemu-guest-agent)
+  - systemctl set-default multi-user.target
+EOF
+else
 ssh "$PVE_HOST" "mkdir -p /var/lib/vz/snippets && cat > /var/lib/vz/snippets/netlab-linux.yaml" <<'EOF'
 #cloud-config
 package_update: true
@@ -57,6 +103,7 @@ runcmd:
   - systemctl set-default graphical.target
   - systemctl isolate graphical.target
 EOF
+fi
 
 ssh "$PVE_HOST" sh -s <<EOF
 set -e
@@ -66,16 +113,16 @@ fi
 img=/var/lib/vz/template/cache/debian-13-generic-amd64.qcow2
 [ -f \$img ] || curl -fsSL -o \$img $IMG
 qm create $ID --name $NAME --ostype l26 --machine q35 --cpu host \
-  --cores ${LINUX_CORES:-4} --memory ${LINUX_MEMORY:-8192} \
+  --cores $CORES --memory $MEMORY ${AUDIO:+--audio0 device=$AUDIO,driver=none} \
   --scsihw virtio-scsi-single --scsi0 $STORE:0,import-from=\$img,discard=on \
   --ide2 $STORE:cloudinit --boot order=scsi0 \
-  --net0 virtio,bridge=${LAN_BRIDGE:-vmbr0} --vga std --agent enabled=1 \
+  --net0 virtio,bridge=${LAN_BRIDGE:-vmbr0} --vga $VGA --agent enabled=1 \
   --ciuser netlab --sshkeys /root/.ssh/authorized_keys --ipconfig0 ip=dhcp \
-  --cicustom vendor=local:snippets/netlab-linux.yaml \
+  --cicustom vendor=local:snippets/$SNIPPET \
   --tags "netlab;linux" --description "netlab Linux test box" >/dev/null
 qm disk resize $ID scsi0 ${LINUX_DISK_GB:-40}G >/dev/null
 qm start $ID
-echo "first boot: cloud-init installs the desktop (5-15 minutes)"
+echo "VMID $ID ($NAME). first boot: cloud-init installs ${DESKTOP:+the desktop and }the guest agent (5-15 minutes)"
 for i in \$(seq 180); do qm agent $ID ping >/dev/null 2>&1 && break; sleep 5; done
 ip=\$(qm agent $ID network-get-interfaces | grep -o '"ip-address" *: *"[0-9.]*"' | grep -v '127.0.0.1' | head -1 | grep -o '[0-9.]*\$')
 echo "address: \$ip"

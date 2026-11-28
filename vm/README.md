@@ -108,3 +108,27 @@ SSH=netlab@<its address or name>
 and use it with `--on linuxbox`. It comes from Debian's "generic" cloud
 image: the "genericcloud" one has no graphics drivers, so LightDM finds no
 screen to log on to.
+
+### A console-only Linux VM
+
+For a project whose console is the thing under test (a tty1 autologin, a
+kiosk compositor, a boot menu), make a second VM with no desktop. Flags win
+over lab.env, and `--no-desktop` writes its own cloud-init snippet
+(`netlab-linux-console.yaml`), so the Linux test box's isn't touched:
+
+```sh
+vm/create-linux-vm.sh --no-desktop --name fpsos-vm --vmid next \
+  --vga virtio --cores 4 --memory 4096 --audio ich9-intel-hda
+```
+
+It boots to `multi-user.target` with only the guest agent added. Describe it
+with its VMID too (`KIND=linux`, `SSH=netlab@<address>`, `VMID=<id>`), and
+drive its real screen through Proxmox, with no desktop in the guest:
+
+```sh
+netlab console fpsos-vm snapshot pre-fpsos   # shut down, snapshot it stopped, start
+netlab console fpsos-vm rollback pre-fpsos   # back to it, cold boot
+netlab console fpsos-vm key ctrl-alt-f2      # qm sendkey names
+netlab console fpsos-vm type 'ls -la'        # then: key ret
+netlab console fpsos-vm snap shot.png        # QEMU screendump
+```
